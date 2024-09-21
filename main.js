@@ -24,5 +24,3 @@ main().catch(err => {
   console.error('Erreur dans le programme principal:', err)
   process.exit(1)
 })
-
-ok
