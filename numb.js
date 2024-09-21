@@ -8,8 +8,10 @@ import * as Block from 'multiformats/block'
 import * as dagCBOR from '@ipld/dag-cbor'
 import { sha256 } from 'multiformats/hashes/sha2'
 import fs from 'fs/promises'
-import crypto from 'crypto'
 import { mdns } from '@libp2p/mdns'
+import crypto from 'crypto'
+import { tls } from '@libp2p/tls'
+import { yamux } from '@chainsafe/libp2p-yamux'
 
 class FilecoinNode {
   constructor(listenPort) {
@@ -27,11 +29,11 @@ class FilecoinNode {
         listen: [`/ip4/0.0.0.0/tcp/${this.listenPort}`]
       },
       transports: [tcp()],
-      streamMuxers: [mplex()],
-      connectionEncryption: [noise()],
+      streamMuxers: [yamux()],
+      connectionEncrypters: [noise()],
       dht: kadDHT(),
       peerDiscovery: [
-        mdns(),
+        mdns()
       ],
       nat: true,
       relay: {
@@ -49,21 +51,23 @@ class FilecoinNode {
     }
 
     this.node.addEventListener('peer:discovery', async (evt) => {
-      console.log('Discovered:', evt.detail.id.toString())
-      const peerId = evt.detail.id.toString()
-      console.log('Discovered peer:', peerId)
-      try {
-        await this.connectToPeer(evt.detail.multiaddrs[0].toString())
-        await this.sendWelcomeMessage(peerId)
-      } catch (err) {
-        console.error(`Échec de la connexion au pair ${peerId}:`, err)
-      }
+        console.log('Discovered:', evt.detail.id.toString());
+        const peerId = evt.detail.id;
+        const peerMultiaddr = evt.detail.multiaddrs[0].toString(); // Utilise l'adresse multiaddr du pair
+        console.log('Discovered peer:', peerId.toString());
+
+        try {
+          await this.connectToPeer(peerMultiaddr); // Essaie de te connecter à l'adresse
+          await this.sendWelcomeMessage(peerId);
+        } catch (err) {
+          console.error(`Échec de la connexion au pair ${peerId}:`, err);
+        }
     })
 
     this.node.handle('/filecoin/welcome/1.0.0', async ({ stream }) => {
         const message = await stream.source.next()
-        console.log('Received welcome message:', message.value.toString())
-        await stream.sink.close()
+        console.log('Received welcome message:', message.value.bufs[0].toString('utf8'))
+        await stream.close()
       })
 
     this.node.handle('/filecoin/blocks/1.0.0', async ({ stream }) => {
@@ -89,14 +93,19 @@ class FilecoinNode {
   }
   async sendWelcomeMessage(peerId) {
     try {
-      const { stream } = await this.node.dialProtocol(peerId, '/filecoin/welcome/1.0.0')
-      const welcomeMessage = `Bienvenue du noeud ${this.node.peerId.toString()}!`
-      await stream.sink.next(Buffer.from(welcomeMessage))
-      await stream.sink.close()
-      console.log('Sent welcome message to peer:', peerId)
-    } catch (err) {
-      console.error('Failed to send welcome message:', err)
-    }
+
+        const connection = await this.node.dial(peerId);
+        const stream = await connection.newStream(['/filecoin/welcome/1.0.0']);
+        const welcomeMessage = `Bienvenue du noeud ${this.node.peerId.toString()}!`;
+        const messageBuffer = Buffer.from(welcomeMessage);
+
+        await stream.sink([messageBuffer]);
+
+        await stream.close();
+        console.log('Sent welcome message to peer:', peerId.toString());
+      } catch (err) {
+        console.error('Failed to send welcome message:', err);
+      }
   }
   async splitAndStoreFile(filePath) {
     const fileContent = await fs.readFile(filePath)
