@@ -64,13 +64,13 @@ class FilecoinNode {
         }
     })
 
-    this.node.handle('/filecoin/welcome/1.0.0', async ({ stream }) => {
+    this.node.handle('/nebula/welcome/1.0.0', async ({ stream }) => {
         const message = await stream.source.next()
         console.log('Received welcome message:', message.value.bufs[0].toString('utf8'))
         await stream.close()
       })
 
-    this.node.handle('/filecoin/blocks/1.0.0', async ({ stream }) => {
+    this.node.handle('/nebula/blocks/1.0.0', async ({ stream }) => {
       const message = await stream.source.next()
       const { cid } = JSON.parse(message.value.toString())
       const block = this.storage.get(cid)
@@ -79,7 +79,24 @@ class FilecoinNode {
       }
       await stream.close()
     })
-
+    this.node.handle('/nebula/blocks/1.0.0', async ({ stream }) => {
+      const message = await stream.source.next();
+      
+      try {
+        const block = JSON.parse(message.value.toString()); 
+        const cid = block.cid;
+        
+        this.storage.set(cid, block);
+        console.log('Bloc reçu et stocké avec CID:', cid);
+        
+        await stream.sink.next(Buffer.from('Bloc reçu et stocké'));
+      } catch (err) {
+        console.error('Erreur lors de la réception et du stockage du bloc:', err);
+      }
+    
+      await stream.close();
+    });
+    
     await this.node.start()
     console.log('Node started with ID:', this.node.peerId.toString())
     console.log('Listening on:', this.node.getMultiaddrs().map(ma => ma.toString()).join(', '))
@@ -95,7 +112,7 @@ class FilecoinNode {
     try {
 
         const connection = await this.node.dial(peerId);
-        const stream = await connection.newStream(['/filecoin/welcome/1.0.0']);
+        const stream = await connection.newStream(['/nebula/welcome/1.0.0']);
         const welcomeMessage = `Bienvenue du noeud ${this.node.peerId.toString()}!`;
         const messageBuffer = Buffer.from(welcomeMessage);
 
@@ -123,7 +140,23 @@ class FilecoinNode {
     const cid = block.cid.toString()
     this.storage.set(cid, block)
     console.log('Stored block:', cid)
-    await this.node.contentRouting.provide(block.cid)
+    const providers = await this.node.contentRouting.findProviders(block.cid, {timeout: 5000})
+    if(porviders.length>0){
+      for(const provider of providers){
+        try{
+          console.log('Envoi du bloc à un pair :', provider.id.toString());
+          const {stream} = await this.node.dialProtocol(provider.id, '/nebula/strorbloc/1.0.0')
+          await stream.sink = next(Buffer.from(JSON.stringify(block)))
+          await stream.close()
+          console.log('Bloc partagé avec le pair:', provider.id.toString());
+        } catch (err) {
+          console.error('Échec de l\'envoi du bloc au pair:', err);
+        }
+      }   
+    }
+
+    await this.node.contentRouting.provide(block.cid);
+    console.log('Bloc prêt pour les pairs:', cid);
   }
 
   async retrieveFile(fileMetadata) {
@@ -140,23 +173,26 @@ class FilecoinNode {
 
   async retrieveBlock(cid) {
     if (this.storage.has(cid)) {
-      return this.storage.get(cid)
+      return this.storage.get(cid);
     }
-    const providers = await this.node.contentRouting.findProviders(cid, { timeout: 5000 })
+  
+    const providers = await this.node.contentRouting.findProviders(cid, { timeout: 5000 });
     for (const provider of providers) {
       try {
-        const { stream } = await this.node.dialProtocol(provider.id, '/filecoin/blocks/1.0.0')
-        await stream.sink.next(Buffer.from(JSON.stringify({ cid })))
-        const message = await stream.source.next()
-        const block = JSON.parse(message.value.toString())
-        this.storage.set(cid, block)
-        return block
+        console.log('Tentative de récupération du bloc à partir du pair :', provider.id.toString());
+        const { stream } = await this.node.dialProtocol(provider.id, '/nebula/blocks/1.0.0');
+        await stream.sink.next(Buffer.from(JSON.stringify({ cid })));
+        const message = await stream.source.next();
+        const block = JSON.parse(message.value.toString());
+        this.storage.set(cid, block); 
+        return block;
       } catch (err) {
-        console.error('Failed to retrieve block from provider:', err)
+        console.error('Échec de la récupération du bloc depuis le pair:', err);
       }
     }
-    throw new Error('Block not found')
+    throw new Error('Bloc introuvable sur le réseau');
   }
+  
 
   async createDeal(clientAddress, minerAddress, data, price, duration) {
     const dealId = crypto.randomBytes(8).toString('hex')

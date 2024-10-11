@@ -4,7 +4,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node main.js"
   },
   "author": "",
   "license": "ISC",
@@ -22,6 +23,7 @@
     "@multiformats/multiaddr": "^12.3.1",
     "libp2p": "^2.0.2",
     "multiformats": "^13.3.0",
+    "numb": "file:",
     "om": "^0.0.33-beta"
   }
 }
