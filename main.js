@@ -1,4 +1,4 @@
-import { FilecoinNode } from "./numb.js"; // Importer la classe FilecoinNode
+import { FilecoinNode } from "./numb.js";
 import process from "process";
 
 async function main() {

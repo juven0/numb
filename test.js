@@ -1,0 +1,38 @@
+import express from "express";
+import multer from "multer";
+import { FilecoinNode } from "./numb.js";
+import path from "path";
+import process from "process";
+
+const app = express();
+const port = 3000;
+const upload = multer({ dest: "uploads/" });
+
+const filecoinNode = new FilecoinNode(4002);
+await filecoinNode.init();
+
+app.use(express.static("public"));
+
+app.post("/upload", upload.single("file"), async (req, res) => {
+  const filePath = "./myDoc.txt";
+
+  try {
+    const blocks = await filecoinNode.splitAndStoreFile(filePath);
+    console.log(
+      "Fichier découpé et stocké en blocs :",
+      blocks.map((block) => block.cid.toString())
+    );
+
+    res.status(200).send({
+      message: "Fichier uploadé et stocké avec succès!",
+      blocks: blocks.map((block) => block.cid.toString()),
+    });
+  } catch (err) {
+    console.error("Erreur lors du stockage du fichier:", err);
+    res.status(500).send("Erreur lors du stockage du fichier");
+  }
+});
+
+app.listen(port, () => {
+  console.log(`Serveur web démarré sur http://localhost:${port}`);
+});
