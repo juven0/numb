@@ -1,6 +1,8 @@
 import { create } from 'ipfs-core';
 import fs from 'fs/promises';
 import crypto from 'crypto';
+import  mdns  from "multicast-dns";
+import { multiaddr } from '@multiformats/multiaddr';
 
 class FilecoinNode {
   constructor(port) {
@@ -9,6 +11,7 @@ class FilecoinNode {
     this.storage = new Map(); // Simule le stockage local des blocs
     this.BLOCK_SIZE = 256 * 1024; // 256 KB par bloc
     this.port = port; // Chaque nœud aura un port différent
+    this.mdns = mdns();
   }
 
   // Initialisation du nœud IPFS
@@ -27,7 +30,7 @@ class FilecoinNode {
         pubsub: true, // Activer pubsub pour les communications
       },
       discovery: {
-        mdns: {
+        MDNS: {
           enabled: true,
           interval: 10000, // Découverte locale via mDNS
         },
@@ -42,14 +45,16 @@ class FilecoinNode {
       balance: 1000, // Solde initial
     };
 
-    // Gérer les messages de bienvenue pour la découverte des pairs
+
 
     this.listenForWelcomeMessages()
+    if (this.node && this.node.isOnline()) {
+        await this.node.stop();
+        console.log('Nœud arrêté avec succès.');
+      }
     await this.node.start();
-    console.log(
-      "Listening on:",
-      this.node.getMultiaddrs().map((ma) => ma.toString()).join(", ")
-    );
+
+    this.enableAutoDiscovery();
   }
 
   async sendWelcomeMessage() {
@@ -83,19 +88,41 @@ class FilecoinNode {
     return blocks;
   }
 
-  // Stocker un bloc dans IPFS et le publier dans la DHT
-  async storeBlock(block) {
-    const { cid } = await this.node.add(block);
-    this.storage.set(cid.toString(), block);
-    console.log('Bloc stocké avec CID:', cid.toString());
 
-    // Publier le CID dans la DHT
-    try {
-      await this.node.dht.provide(cid);
-      console.log(`CID ${cid.toString()} publié dans la DHT.`);
-    } catch (err) {
-      console.error(`Erreur lors de la publication du CID: ${err.message}`);
-    }
+  enableAutoDiscovery() {
+    this.node.libp2p.addEventListener('peer:discovery', async (event) => {
+        try {
+            const peerId = event.detail.id.toString();
+            console.log(`Pair découvert: ${peerId}`);
+
+            // Récupérer les adresses multi-transport du pair découvert
+            const peerInfo = await this.node.swarm.peers();
+            const peer = peerInfo.find((p) => p.peer.toString() === peerId);
+
+            if (peer && peer.addr) {
+              // Connexion à l'adresse multi-transport trouvée
+              console.log(`Connexion à l'adresse: ${peer.addr.toString()}`);
+              await this.node.swarm.connect(peer.addr);
+              console.log(`Connecté au pair: ${peerId}`);
+            } else {
+              console.error(`Aucune adresse trouvée pour le pair: ${peerId}`);
+            }
+          } catch (err) {
+            console.error(`Erreur lors de la connexion au pair: ${err.message}`);
+          }
+      })
+
+    setInterval(async () => {
+      try {
+        const peers = await this.node.swarm.peers();
+        console.log(`Nombre de pairs connectés: ${peers.length}`);
+        peers.forEach(peer => {
+          console.log(`- Pair: ${peer.peer} (${peer.addr})`);
+        });
+      } catch (err) {
+        console.error(`Erreur lors de la récupération des pairs: ${err.message}`);
+      }
+    }, 10000); // Vérifier les connexions toutes les 10 secondes
   }
 
   // Récupérer un fichier à partir de ses métadonnées (CID des blocs)
