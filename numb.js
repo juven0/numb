@@ -13,6 +13,8 @@ import crypto from "crypto";
 import { tls } from "@libp2p/tls";
 import { yamux } from "@chainsafe/libp2p-yamux";
 import { identify } from "@libp2p/identify";
+import { CID } from "multiformats/cid";
+import { bootstrap } from "@libp2p/bootstrap";
 
 class FilecoinNode {
   constructor(listenPort) {
@@ -32,16 +34,31 @@ class FilecoinNode {
       transports: [tcp()],
       streamMuxers: [yamux()],
       connectionEncrypters: [noise()],
+      contentRouters: [kadDHT()],
+      dht: new kadDHT({
+        kBucketSize: 20,
+        clientMode: false,
+      }),
       services: {
-        identify: identify(), // Ajoutez cette ligne
-        dht: kadDHT({
-          enabled: true,
-          clientMode: false,
-          randomWalk: {
-            enabled: true,
-          },
-        }),
+        identify: identify(),
       },
+      // services: {
+      //   identify: identify(),
+      //   dht: new kadDHT({
+      //     enabled: true,
+      //     clientMode: false,
+      //     randomWalk: {
+      //       enabled: true,
+      //       interval: 300000,
+      //       timeout: 10000,
+      //     },
+      //     kBucketSize: 20,
+      //     pingTimeout: 10000,
+      //     providesTimeout: 60000,
+      //     maxInboundStreams: 32,
+      //     maxOutboundStreams: 32,
+      //   }),
+      // },
       peerDiscovery: [mdns()],
       nat: true,
       relay: {
@@ -120,6 +137,18 @@ class FilecoinNode {
         .map((ma) => ma.toString())
         .join(", ")
     );
+    if (this.node.services.dht) {
+      await this.node.services.dht.start();
+      if (this.node.services.dht._started) {
+        console.log("Le DHT est bien démarré.");
+      } else {
+        console.error("Le DHT n'a pas pu démarrer.");
+      }
+    } else {
+      console.error("Le service DHT n'est pas disponible.");
+    }
+
+    console.log(this.node.services);
     console.log("Wallet address:", this.wallet.address);
   }
 
@@ -158,22 +187,31 @@ class FilecoinNode {
     }
     return blocks;
   }
+  async ensureDHTStarted() {
+    const peerIds = await this.node.peerStore.all();
 
-  async storeBlock(block) {
-    const cid = block.cid.toString();
-    console.log(block);
-    this.storage.set(cid, block);
-    console.log("Stored block:", cid);
-    const connections = this.node.getConnections();
-    console.log("Pairs connectés:", connections.length);
-
-    try {
-      await this.node.contentRouting.provide(block.cid);
-      console.log("Bloc prêt pour les pairs:", cid);
-    } catch (err) {
-      console.error("Erreur lors de la publication du CID:", err);
+    console.log("Pairs connus dans la table de routage :");
+    peerIds.forEach((peerId) => {
+      console.log(peerId.id.toString());
+    });
+    if (this.node.services.dht && !this.node.services.dht._started) {
+      console.log(this.node.services.dht._started);
+      console.log("Le DHT n'est pas encore démarré, en attente...");
+      try {
+        await this.node.services.dht.start();
+        console.log("DHT démarré.");
+      } catch {
+        console.log("errore to start DHT");
+      }
     }
-    // if (providers.length > 0) {
+  }
+  async storeBlock(block) {
+    this.storage.set(block.cid, block);
+
+    // const providers = await this.node.contentRouting.provide(block.cid, {
+    //   timeout: 20000,
+    // });
+    // if (connections.length > 0) {
     //   for (const provider of providers) {
     //     try {
     //       console.log("Envoi du bloc à un pair :", provider.id.toString());
@@ -189,13 +227,30 @@ class FilecoinNode {
     //     }
     //   }
     // }
+    try {
+      // await this.ensureDHTStarted();
+      await this.node.contentRouting.provide(block.cid, { timeout: 20000 });
+      console.error("publier");
+    } catch (err) {
+      console.error("Erreur lors de la publication du CID:", err);
+    }
 
-    // try {
-    //   await this.node.contentRouting.provide(block.cid);
-    //   console.log("Bloc prêt pour les pairs:", cid);
-    // } catch (err) {
-    //   console.error("Erreur lors de la publication du CID:", err);
-    // }
+    try {
+      const providers = this.node.contentRouting.findProviders(block.cid);
+      const providerArray = [];
+      for await (const provider of providers) {
+        providerArray.push(provider.id.toString());
+      }
+
+      if (providerArray.length > 0) {
+        console.log("Providers trouvés pour le CID:", providerArray);
+      } else {
+        console.log("Aucun provider trouvé pour le CID.");
+      }
+    } catch (err) {
+      console.error(`Erreur lors de la recherche de providers: ${err.message}`);
+    }
+    return;
   }
 
   async retrieveFile(fileMetadata) {
