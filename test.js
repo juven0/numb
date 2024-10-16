@@ -13,7 +13,7 @@ await filecoinNode.init();
 
 app.use(express.static("public"));
 
-app.post("/upload", upload.single("file"), async (req, res) => {
+app.post("/upload", async (req, res) => {
   const filePath = "./myDoc.txt";
 
   try {
