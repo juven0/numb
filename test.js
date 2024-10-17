@@ -15,9 +15,9 @@ app.use(express.static("public"));
 
 app.post("/upload", async (req, res) => {
   const filePath = "./myDoc.txt";
-
+  const name = path.basename(filePath);
   try {
-    const blocks = await filecoinNode.splitAndStoreFile(filePath);
+    const blocks = await filecoinNode.splitAndStoreFile(filePath, name);
     console.log(
       "Fichier découpé et stocké en blocs :",
       blocks.map((block) => block.cid.toString())

@@ -16,6 +16,9 @@ import { identify } from "@libp2p/identify";
 import { CID } from "multiformats/cid";
 import { bootstrap } from "@libp2p/bootstrap";
 import { DHT } from "./dht/dht.js";
+import { BlockChain } from "./blockchain/blockchain.js";
+import { FileMetadata } from "./blockchain/fileMetadata.js";
+import { BlockIteme } from "./blockchain/block.js";
 
 class FilecoinNode {
   constructor(listenPort) {
@@ -35,7 +38,6 @@ class FilecoinNode {
       transports: [tcp()],
       streamMuxers: [yamux()],
       connectionEncrypters: [noise()],
-      // contentRouters: [kadDHT()],
 
       services: {
         identify: identify(),
@@ -52,6 +54,7 @@ class FilecoinNode {
     });
 
     this.DHT = new DHT(this.node);
+    this.BlockChain = new BlockChain();
     this.DHT.start();
 
     this.wallet = {
@@ -145,19 +148,39 @@ class FilecoinNode {
       console.error("Failed to send welcome message:", err);
     }
   }
-  async splitAndStoreFile(filePath) {
+  async splitAndStoreFile(filePath, name) {
     const fileContent = await fs.readFile(filePath);
+    const stats = await fs.stat(filePath);
+    const hash = crypto.createHash("sha256").update(fileContent).digest("hex");
+    const fileMetaData = new FileMetadata(name, stats.size, hash);
+
+    const previousHash = this.BlockChain.getLasteBlock().hash;
+    const index = this.BlockChain.getLasteBlock().index;
+
+    const newBlock = new BlockIteme(
+      index + 1,
+      previousHash,
+      fileMetaData,
+      Date.now(),
+      [],
+      []
+    );
+
     const blocks = [];
     for (let i = 0; i < fileContent.length; i += this.BLOCK_SIZE) {
       const chunk = fileContent.slice(i, i + this.BLOCK_SIZE);
+
       const block = await Block.encode({
         value: chunk,
         codec: dagCBOR,
         hasher: sha256,
       });
+
       blocks.push(block);
       await this.storeBlock(block);
     }
+    this.BlockChain.addBlock(newBlock);
+    console.log(this.BlockChain);
     return blocks;
   }
   async ensureDHTStarted() {

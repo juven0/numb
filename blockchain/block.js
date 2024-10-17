@@ -1,8 +1,16 @@
 import crypto from "crypto";
 
-class Block {
-  constructor(index, previousHash, timestamp, transactions, cids) {
+class BlockIteme {
+  constructor(
+    index,
+    previousHash,
+    fileMetadata,
+    timestamp,
+    transactions,
+    cids
+  ) {
     this.index = index;
+    this.fileMetadata = fileMetadata;
     this.previousHash = previousHash;
     this.timestamp = timestamp;
     this.transactions = transactions;
@@ -24,4 +32,4 @@ class Block {
   }
 }
 
-export { Block };
+export { BlockIteme };

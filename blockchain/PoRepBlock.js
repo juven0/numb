@@ -8,3 +8,5 @@ class ReplicationTransaction {
     this.timestamp = Date.now();
   }
 }
+
+export { ReplicationTransaction };
