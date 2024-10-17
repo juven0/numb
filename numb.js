@@ -167,6 +167,7 @@ class FilecoinNode {
     );
 
     const blocks = [];
+    const Cids = [];
     for (let i = 0; i < fileContent.length; i += this.BLOCK_SIZE) {
       const chunk = fileContent.slice(i, i + this.BLOCK_SIZE);
 
@@ -177,8 +178,10 @@ class FilecoinNode {
       });
 
       blocks.push(block);
+      Cids.push(block.cid);
       await this.storeBlock(block);
     }
+    newBlock.cids = Cids;
     this.BlockChain.addBlock(newBlock);
     console.log(this.BlockChain);
     return blocks;
