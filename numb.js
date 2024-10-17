@@ -34,13 +34,24 @@ class FilecoinNode {
       transports: [tcp()],
       streamMuxers: [yamux()],
       connectionEncrypters: [noise()],
-      contentRouters: [kadDHT()],
-      dht: new kadDHT({
-        kBucketSize: 20,
-        clientMode: false,
-      }),
+      // contentRouters: [kadDHT()],
+
       services: {
         identify: identify(),
+        dht: kadDHT({
+          enabled: true,
+          clientMode: false,
+          randomWalk: {
+            enabled: true,
+            interval: 300000,
+            timeout: 10000,
+          },
+          kBucketSize: 20,
+          pingTimeout: 10000,
+          providesTimeout: 60000,
+          maxInboundStreams: 32,
+          maxOutboundStreams: 32,
+        }),
       },
       // services: {
       //   identify: identify(),
@@ -229,14 +240,25 @@ class FilecoinNode {
     // }
     try {
       // await this.ensureDHTStarted();
+
       await this.node.contentRouting.provide(block.cid, { timeout: 20000 });
-      console.error("publier");
+      console.log(this.node.services.dht);
     } catch (err) {
       console.error("Erreur lors de la publication du CID:", err);
     }
 
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Timeout lors de la recherche de providers")),
+        20000
+      )
+    );
+
     try {
-      const providers = this.node.contentRouting.findProviders(block.cid);
+      const providers = await Promise.race([
+        this.node.contentRouting.findProviders(block.cid),
+        timeoutPromise,
+      ]);
       const providerArray = [];
       for await (const provider of providers) {
         providerArray.push(provider.id.toString());

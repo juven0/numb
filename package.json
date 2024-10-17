@@ -4,7 +4,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "node test.js",
+    "test": "cross-env DEBUG=libp2p:kad-dht,libp2p:connection node test.js",
     "start": "node main.js"
   },
   "author": "",
@@ -30,5 +30,8 @@
     "multiformats": "^13.3.0",
     "numb": "file:",
     "om": "^0.0.33-beta"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3"
   }
 }
