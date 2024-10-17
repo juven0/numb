@@ -15,6 +15,7 @@ import { yamux } from "@chainsafe/libp2p-yamux";
 import { identify } from "@libp2p/identify";
 import { CID } from "multiformats/cid";
 import { bootstrap } from "@libp2p/bootstrap";
+import { DHT } from "./dht/dht.js";
 
 class FilecoinNode {
   constructor(listenPort) {
@@ -38,38 +39,7 @@ class FilecoinNode {
 
       services: {
         identify: identify(),
-        dht: kadDHT({
-          enabled: true,
-          clientMode: false,
-          randomWalk: {
-            enabled: true,
-            interval: 300000,
-            timeout: 10000,
-          },
-          kBucketSize: 20,
-          pingTimeout: 10000,
-          providesTimeout: 60000,
-          maxInboundStreams: 32,
-          maxOutboundStreams: 32,
-        }),
       },
-      // services: {
-      //   identify: identify(),
-      //   dht: new kadDHT({
-      //     enabled: true,
-      //     clientMode: false,
-      //     randomWalk: {
-      //       enabled: true,
-      //       interval: 300000,
-      //       timeout: 10000,
-      //     },
-      //     kBucketSize: 20,
-      //     pingTimeout: 10000,
-      //     providesTimeout: 60000,
-      //     maxInboundStreams: 32,
-      //     maxOutboundStreams: 32,
-      //   }),
-      // },
       peerDiscovery: [mdns()],
       nat: true,
       relay: {
@@ -80,6 +50,9 @@ class FilecoinNode {
         },
       },
     });
+
+    this.DHT = new DHT(this.node);
+    this.DHT.start();
 
     this.wallet = {
       address: crypto.randomBytes(20).toString("hex"),
@@ -148,18 +121,7 @@ class FilecoinNode {
         .map((ma) => ma.toString())
         .join(", ")
     );
-    if (this.node.services.dht) {
-      await this.node.services.dht.start();
-      if (this.node.services.dht._started) {
-        console.log("Le DHT est bien démarré.");
-      } else {
-        console.error("Le DHT n'a pas pu démarrer.");
-      }
-    } else {
-      console.error("Le service DHT n'est pas disponible.");
-    }
 
-    console.log(this.node.services);
     console.log("Wallet address:", this.wallet.address);
   }
 
@@ -200,25 +162,9 @@ class FilecoinNode {
   }
   async ensureDHTStarted() {
     const peerIds = await this.node.peerStore.all();
-
-    console.log("Pairs connus dans la table de routage :");
-    peerIds.forEach((peerId) => {
-      console.log(peerId.id.toString());
-    });
-    if (this.node.services.dht && !this.node.services.dht._started) {
-      console.log(this.node.services.dht._started);
-      console.log("Le DHT n'est pas encore démarré, en attente...");
-      try {
-        await this.node.services.dht.start();
-        console.log("DHT démarré.");
-      } catch {
-        console.log("errore to start DHT");
-      }
-    }
   }
   async storeBlock(block) {
-    this.storage.set(block.cid, block);
-
+    this.DHT.put(block.cid, block);
     // const providers = await this.node.contentRouting.provide(block.cid, {
     //   timeout: 20000,
     // });
@@ -238,40 +184,15 @@ class FilecoinNode {
     //     }
     //   }
     // }
-    try {
-      // await this.ensureDHTStarted();
 
-      await this.node.contentRouting.provide(block.cid, { timeout: 20000 });
-      console.log(this.node.services.dht);
-    } catch (err) {
-      console.error("Erreur lors de la publication du CID:", err);
-    }
+    // try {
+    //   // await this.ensureDHTStarted();
+    //   await this.node.contentRouting.provide(block.cid, { timeout: 20000 });
+    //   console.error("publier");
+    // } catch (err) {
+    //   console.error("Erreur lors de la publication du CID:", err);
+    // }
 
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(
-        () => reject(new Error("Timeout lors de la recherche de providers")),
-        20000
-      )
-    );
-
-    try {
-      const providers = await Promise.race([
-        this.node.contentRouting.findProviders(block.cid),
-        timeoutPromise,
-      ]);
-      const providerArray = [];
-      for await (const provider of providers) {
-        providerArray.push(provider.id.toString());
-      }
-
-      if (providerArray.length > 0) {
-        console.log("Providers trouvés pour le CID:", providerArray);
-      } else {
-        console.log("Aucun provider trouvé pour le CID.");
-      }
-    } catch (err) {
-      console.error(`Erreur lors de la recherche de providers: ${err.message}`);
-    }
     return;
   }
 
@@ -288,66 +209,12 @@ class FilecoinNode {
   }
 
   async retrieveBlock(cid) {
-    if (this.storage.has(cid)) {
-      return this.storage.get(cid);
+    try {
+      const value = await this.DHT.get(cid);
+      return value;
+    } catch {
+      console.log("error .. ");
     }
-
-    const providers = await this.node.contentRouting.findProviders(cid, {
-      timeout: 5000,
-    });
-    for (const provider of providers) {
-      try {
-        console.log(
-          "Tentative de récupération du bloc à partir du pair :",
-          provider.id.toString()
-        );
-        const { stream } = await this.node.dialProtocol(
-          provider.id,
-          "/nebula/blocks/1.0.0"
-        );
-        await stream.sink.next(Buffer.from(JSON.stringify({ cid })));
-        const message = await stream.source.next();
-        const block = JSON.parse(message.value.toString());
-        this.storage.set(cid, block);
-        return block;
-      } catch (err) {
-        console.error("Échec de la récupération du bloc depuis le pair:", err);
-      }
-    }
-    throw new Error("Bloc introuvable sur le réseau");
-  }
-
-  async createDeal(clientAddress, minerAddress, data, price, duration) {
-    const dealId = crypto.randomBytes(8).toString("hex");
-    const deal = {
-      id: dealId,
-      clientAddress,
-      minerAddress,
-      data,
-      price,
-      duration,
-      startTime: Date.now(),
-    };
-    this.deals.set(dealId, deal);
-    console.log("Deal created:", dealId);
-    return dealId;
-  }
-
-  async mineDeal(dealId) {
-    const deal = this.deals.get(dealId);
-    if (!deal) throw new Error("Deal not found");
-
-    console.log("Mining deal:", dealId);
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-
-    this.wallet.balance += deal.price;
-    console.log("Deal mined. New balance:", this.wallet.balance);
-  }
-
-  async retrieveAndDisplayFile(fileMetadata) {
-    const fileContent = await this.retrieveFile(fileMetadata);
-    console.log("\nContenu du fichier récupéré :");
-    console.log(fileContent.toString());
   }
 }
 

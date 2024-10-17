@@ -13,25 +13,21 @@
   "dependencies": {
     "@chainsafe/libp2p-noise": "^16.0.0",
     "@chainsafe/libp2p-yamux": "^7.0.1",
-    "@ipld/dag-cbor": "^9.2.1",
     "@libp2p/bootstrap": "^11.0.8",
     "@libp2p/identify": "^3.0.8",
     "@libp2p/kad-dht": "^14.0.1",
     "@libp2p/mdns": "^11.0.8",
     "@libp2p/mplex": "^11.0.8",
-    "@libp2p/peer-id": "^5.0.1",
+    "@libp2p/peer-id": "^5.0.5",
     "@libp2p/tcp": "^10.0.9",
-    "@libp2p/tls": "^2.0.1",
-    "@libp2p/utils": "^6.1.1",
+    "@libp2p/tls": "^2.0.8",
     "@multiformats/multiaddr": "^12.3.1",
     "express": "^4.21.1",
+    "ipfs": "^0.66.1",
+    "ipfs-core": "^0.18.1",
+    "ipfs-http-client": "^60.0.1",
     "libp2p": "^2.1.9",
     "multer": "^1.4.5-lts.1",
-    "multiformats": "^13.3.0",
-    "numb": "file:",
-    "om": "^0.0.33-beta"
-  },
-  "devDependencies": {
-    "cross-env": "^7.0.3"
+    "numb": "file:"
   }
 }

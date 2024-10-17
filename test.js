@@ -13,7 +13,7 @@ await filecoinNode.init();
 
 app.use(express.static("public"));
 
-app.post("/upload", upload.single("file"), async (req, res) => {
+app.post("/upload", async (req, res) => {
   const filePath = "./myDoc.txt";
 
   try {
@@ -31,6 +31,16 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     console.error("Erreur lors du stockage du fichier:", err);
     res.status(500).send("Erreur lors du stockage du fichier");
   }
+});
+
+app.get("/get", async (req, res) => {
+  const result = await filecoinNode.retrieveBlock(
+    "bafyreidgewugbq56jvrfgyyxwq6dqywmum6tqzp45nftduwze4dyakoibi"
+  );
+
+  res.status(200).send({
+    message: result,
+  });
 });
 
 app.listen(port, () => {
