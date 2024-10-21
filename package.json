@@ -26,6 +26,7 @@
     "ipfs": "^0.66.1",
     "ipfs-core": "^0.18.1",
     "ipfs-http-client": "^60.0.1",
+    "level": "^8.0.1",
     "libp2p": "^2.1.9",
     "multer": "^1.4.5-lts.1",
     "numb": "file:",
