@@ -26,7 +26,7 @@ class FilecoinNode {
     this.wallet = null;
     this.storage = new Map();
     this.deals = new Map();
-    this.BLOCK_SIZE = 256 * 1024; // 256 KB
+    this.BLOCK_SIZE = 1024 * 1024;
     this.listenPort = listenPort;
   }
 
@@ -178,6 +178,7 @@ class FilecoinNode {
       });
 
       blocks.push(block);
+      console.log(block);
       Cids.push(block.cid);
       await this.storeBlock(block);
     }
@@ -190,34 +191,11 @@ class FilecoinNode {
     const peerIds = await this.node.peerStore.all();
   }
   async storeBlock(block) {
-    this.DHT.put(block.cid, block);
-    // const providers = await this.node.contentRouting.provide(block.cid, {
-    //   timeout: 20000,
-    // });
-    // if (connections.length > 0) {
-    //   for (const provider of providers) {
-    //     try {
-    //       console.log("Envoi du bloc à un pair :", provider.id.toString());
-    //       const { stream } = await this.node.dialProtocol(
-    //         provider.id,
-    //         "/nebula/strorbloc/1.0.0"
-    //       );
-    //       await stream.sink.next(Buffer.from(JSON.stringify(block)));
-    //       await stream.close();
-    //       console.log("Bloc partagé avec le pair:", provider.id.toString());
-    //     } catch (err) {
-    //       console.error("Échec de l'envoi du bloc au pair:", err);
-    //     }
-    //   }
-    // }
+    console.log("storeBlock called with CID:", block.cid.toString());
+    console.log("Block value type:", typeof block.value);
+    console.log("Block value:", block.value);
 
-    // try {
-    //   // await this.ensureDHTStarted();
-    //   await this.node.contentRouting.provide(block.cid, { timeout: 20000 });
-    //   console.error("publier");
-    // } catch (err) {
-    //   console.error("Erreur lors de la publication du CID:", err);
-    // }
+    this.DHT.put(block.cid, block.value);
 
     return;
   }

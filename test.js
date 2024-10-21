@@ -14,7 +14,7 @@ await filecoinNode.init();
 app.use(express.static("public"));
 
 app.post("/upload", async (req, res) => {
-  const filePath = "./myDoc.txt";
+  const filePath = "./projet_perso-main.zip";
   const name = path.basename(filePath);
   try {
     const blocks = await filecoinNode.splitAndStoreFile(filePath, name);

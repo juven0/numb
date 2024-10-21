@@ -28,6 +28,7 @@
     "ipfs-http-client": "^60.0.1",
     "libp2p": "^2.1.9",
     "multer": "^1.4.5-lts.1",
-    "numb": "file:"
+    "numb": "file:",
+    "uint8arrays": "^5.1.0"
   }
 }
