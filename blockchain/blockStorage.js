@@ -18,12 +18,16 @@ class BlockStorage {
   }
 
   async getLastBlockHash() {
-    let LastBlockHash = null;
-    for (const [key, _] of this.db.iterator({ reverse, limit: 1 })) {
-      LastBlockHash = key;
+    let lastHash = null;
+    for await (const [hash, _] of this.db.iterator({
+      reverse: true,
+      limit: 1,
+    })) {
+      lastHash = hash;
     }
-    return key;
+    return lastHash;
   }
+
   async *getAllBlocks() {
     for await (const [hash, value] of this.db.iterator()) {
       yield value;

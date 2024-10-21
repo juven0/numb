@@ -6,7 +6,7 @@ class DHT {
   constructor(node) {
     this.node = node;
     this.storage = new Map();
-    this.chunkSize = 32 * 1024; // 32KB chunks
+    this.chunkSize = 32 * 1024;
   }
 
   async start() {

@@ -54,8 +54,8 @@ class FilecoinNode {
     });
 
     this.DHT = new DHT(this.node);
-    this.BlockChain = new BlockChain();
     this.DHT.start();
+    this.BlockChain = new BlockChain("./blockchain-db", this.DHT, this.node);
 
     this.wallet = {
       address: crypto.randomBytes(20).toString("hex"),

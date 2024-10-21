@@ -9,7 +9,7 @@ class BlockchainSynchronizer {
 
   async start() {
     await this.node.handle("/blockchain/sync", this._handleSync.bind(this));
-    setInterval(() => this.syncWithPeers(), 60000); // Sync every minute
+    setInterval(() => this.syncWithPeers(), 60000);
   }
 
   async syncWithPeers() {
