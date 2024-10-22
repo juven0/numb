@@ -19,6 +19,7 @@ import { DHT } from "./dht/dht.js";
 import { BlockChain } from "./blockchain/blockchain.js";
 import { FileMetadata } from "./blockchain/fileMetadata.js";
 import { BlockIteme } from "./blockchain/block.js";
+import { DistributedUserIdentity } from "./user/DistributedUserIdentity.js";
 
 class FilecoinNode {
   constructor(listenPort) {
@@ -52,10 +53,15 @@ class FilecoinNode {
         },
       },
     });
-
     this.DHT = new DHT(this.node);
+    // this.BlockChain = new BlockChain("./blockchain-db", this.DHT, this.node);
     this.DHT.start();
-    this.BlockChain = new BlockChain("./blockchain-db", this.DHT, this.node);
+    // user manager
+    this.DistributedUserIdentity = new DistributedUserIdentity(
+      this.node,
+      this.DHT
+    );
+    this.DistributedUserIdentity.start();
 
     this.wallet = {
       address: crypto.randomBytes(20).toString("hex"),
@@ -219,6 +225,10 @@ class FilecoinNode {
     } catch {
       console.log("error .. ");
     }
+  }
+
+  async createUser(username) {
+    return await this.DistributedUserIdentity.createUser(username);
   }
 }
 
