@@ -1,5 +1,7 @@
 
 /node_modules
+/users-d
+/blockchain-debug
 # Logs
 logs
 *.log
