@@ -230,6 +230,10 @@ class FilecoinNode {
   async createUser(username) {
     return await this.DistributedUserIdentity.createUser(username);
   }
+
+  async UserLogin(userId, privateKey) {
+    return await this.DistributedUserIdentity.login(userId, privateKey);
+  }
 }
 
 export { FilecoinNode };

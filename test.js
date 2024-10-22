@@ -60,6 +60,21 @@ app.post("/user/create", async (req, res) => {
   }
 });
 
+app.post("/user/login", async (req, res) => {
+  const userInfo = req.body;
+  try {
+    const user = await filecoinNode.UserLogin(
+      userInfo.userid,
+      userInfo.privatekey
+    );
+    res.status(200).send({
+      user: user,
+    });
+  } catch (error) {
+    res.status(500).send(`login faild `);
+  }
+});
+
 app.listen(port, () => {
   console.log(`Serveur web démarré sur http://localhost:${port}`);
 });

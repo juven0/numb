@@ -96,6 +96,20 @@ class DistributedUserIdentity {
     }
   }
 
+  async login(userId, privateKey) {
+    const user = await this.getUser(userId);
+    if (user != null) {
+      return {
+        userId: user.userId,
+        username: user.username,
+        publicKey: user.publicKey,
+        credentials: this._generateCredentials(userId, privateKey),
+      };
+    } else {
+      return null;
+    }
+  }
+
   async _handleUserSync({ stream }) {
     try {
       const message = await this._readStream(stream);
@@ -154,28 +168,6 @@ class DistributedUserIdentity {
     }
   }
 
-  async _waitForNetworkValidation(userId, timeout = 30000) {
-    return new Promise((resolve) => {
-      const checkValidations = async () => {
-        const user = await this.getUser(userId);
-        if (user && user.validations.length >= this._getRequiredValidations()) {
-          resolve(true);
-        }
-      };
-
-      const interval = setInterval(checkValidations, 1000);
-      setTimeout(() => {
-        clearInterval(interval);
-        resolve(false);
-      }, timeout);
-    });
-  }
-
-  _getRequiredValidations() {
-    // Le nombre de validations requises peut être ajusté selon vos besoins
-    return 3;
-  }
-
   async _syncWithNetwork() {
     const peers = await this.dht._findClosestPeers(this.node.peerId.toString());
     for (const peer of peers) {
@@ -189,16 +181,6 @@ class DistributedUserIdentity {
         console.error(`Failed to sync with peer ${peer.id}:`, error);
       }
     }
-  }
-
-  async _verifyUserData(userData) {
-    // Implémenter la vérification des données utilisateur
-    return true;
-  }
-
-  async _verifyValidation(userId, validatorId, signature) {
-    // Implémenter la vérification de la validation
-    return true;
   }
 
   async _readStream(stream) {
@@ -219,19 +201,32 @@ class DistributedUserIdentity {
 
       const tokenString = JSON.stringify(token);
 
-      // Signer le token avec la clé privée
       const sign = crypto.createSign("SHA256");
       sign.update(tokenString);
       const signature = crypto.sign(null, Buffer.from(tokenString), privateKey);
 
       return {
         token: tokenString,
-        signature,
+        signature: signature.toString("hex"),
         expiration: token.expiration,
       };
     } catch (error) {
       console.error("Error generating credentials:", error);
       throw error;
+    }
+  }
+
+  async verifyCredentials(userId, token, signature) {
+    try {
+      const user = await this.getUser(userId);
+      if (!user) return false;
+
+      const verify = crypto.createVerify("SHA256");
+      verify.update(token);
+      return verify.verify(user.publicKey, signature, "hex");
+    } catch (error) {
+      console.error("Error verifying credentials:", error);
+      return false;
     }
   }
 
@@ -249,10 +244,8 @@ class DistributedUserIdentity {
     try {
       console.log("Storing user data:", userData.userId);
 
-      // Vérifier si l'utilisateur existe déjà
       const existingUser = await this.getUser(userData.userId);
       if (existingUser) {
-        // Mettre à jour les données existantes
         const updatedUser = {
           ...existingUser,
           ...userData,
@@ -261,7 +254,6 @@ class DistributedUserIdentity {
         await this.db.put(userData.userId, updatedUser);
         console.log("Updated existing user:", userData.userId);
       } else {
-        // Stocker le nouvel utilisateur
         const newUser = {
           ...userData,
           createdAt: Date.now(),
