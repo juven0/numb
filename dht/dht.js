@@ -42,7 +42,6 @@ class DHT {
 
     const fullData = uint8ArrayConcat(chunks);
     const stringData = uint8ArrayToString(fullData);
-    console.log("Received data:", stringData);
 
     try {
       const { key, value, chunkIndex, totalChunks } = JSON.parse(stringData);
@@ -62,17 +61,20 @@ class DHT {
 
       if (dataArray.filter(Boolean).length === totalChunks) {
         const completeData = dataArray.join("");
-        this.storage.set(key, completeData);
-        console.log(`Stored complete data for key: ${key}`);
+        console.log("key for storage =>" + key);
+        this.storage.set(key.toString("utf8"), completeData);
+        console.log(`Stored complete data for key: ${key.toString("utf8")}`);
       } else {
-        console.log(
-          `Stored chunk ${chunkIndex + 1}/${totalChunks} for key: ${key}`
-        );
+        // console.log(
+        //   `Stored chunk ${
+        //     chunkIndex + 1
+        //   }/${totalChunks} for key: ${key.toString("utf8")}`
+        // );
       }
     } catch (error) {
       console.error("Error parsing incoming data:", error);
     }
-
+    console.log(this.storage.keys().next().value);
     await stream.close();
   }
 
@@ -81,6 +83,7 @@ class DHT {
     let message;
     try {
       message = await stream.source.next();
+      console.log(message);
     } catch (error) {
       console.error("Error reading from stream in _handleGet:", error);
       await stream.close();
@@ -92,8 +95,9 @@ class DHT {
       await stream.close();
       return;
     }
+    const keyBuffer = Buffer.concat(message.value.bufs);
+    const key = keyBuffer.toString("utf8");
 
-    const key = uint8ArrayToString(message.value);
     console.log("Requested key:", key);
     const value = this.storage.get(key);
 
@@ -153,20 +157,21 @@ class DHT {
 
   async get(key) {
     console.log("get called with key:", key);
+
     const closestPeers = await this._findClosestPeers(key);
 
     for (const peer of closestPeers) {
       try {
         console.log("Attempting to dial peer:", peer.id.toString());
+        console.log(typeof key);
         const connection = await this.node.dial(peer.id);
         const stream = await connection.newStream("/simpledht/get");
-        await stream.sink([uint8ArrayFromString(key)]);
+        await stream.sink([uint8ArrayFromString(key.toString())]);
 
         let chunks = [];
         let totalChunks = null;
 
         for await (const chunk of stream.source) {
-          console.log("Received chunk in get:", chunk);
           const decodedChunk = uint8ArrayToString(
             chunk instanceof Uint8Array ? chunk : uint8ArrayConcat(chunk.bufs)
           );
@@ -182,7 +187,7 @@ class DHT {
 
           if (chunks.filter(Boolean).length === totalChunks) {
             await stream.close();
-            return chunks.join("");
+            console.log(chunks.join(""));
           }
         }
 

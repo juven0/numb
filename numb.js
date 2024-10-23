@@ -57,11 +57,11 @@ class FilecoinNode {
     // this.BlockChain = new BlockChain("./blockchain-db", this.DHT, this.node);
     this.DHT.start();
     // user manager
-    this.DistributedUserIdentity = new DistributedUserIdentity(
-      this.node,
-      this.DHT
-    );
-    this.DistributedUserIdentity.start();
+    // this.DistributedUserIdentity = new DistributedUserIdentity(
+    //   this.node,
+    //   this.DHT
+    // );
+    // this.DistributedUserIdentity.start();
 
     this.wallet = {
       address: crypto.randomBytes(20).toString("hex"),
@@ -160,12 +160,12 @@ class FilecoinNode {
     const hash = crypto.createHash("sha256").update(fileContent).digest("hex");
     const fileMetaData = new FileMetadata(name, stats.size, hash);
 
-    const previousHash = this.BlockChain.getLasteBlock().hash;
-    const index = this.BlockChain.getLasteBlock().index;
+    // const previousHash = this.BlockChain.getLasteBlock().hash;
+    // const index = this.BlockChain.getLasteBlock().index;
 
     const newBlock = new BlockIteme(
-      index + 1,
-      previousHash,
+      1,
+      "gjjhghggkj",
       fileMetaData,
       Date.now(),
       [],
@@ -184,13 +184,16 @@ class FilecoinNode {
       });
 
       blocks.push(block);
-      console.log(block);
       Cids.push(block.cid);
       await this.storeBlock(block);
     }
     newBlock.cids = Cids;
-    this.BlockChain.addBlock(newBlock);
-    console.log(this.BlockChain);
+    //test retrive file
+    await this.retrieveFile(newBlock.fileMetadata, newBlock.cids);
+
+    // this.BlockChain.addBlock(newBlock);
+    // console.log(this.BlockChain);
+
     return blocks;
   }
   async ensureDHTStarted() {
@@ -201,21 +204,22 @@ class FilecoinNode {
     console.log("Block value type:", typeof block.value);
     console.log("Block value:", block.value);
 
-    this.DHT.put(block.cid, block.value);
+    await this.DHT.put(block.cid, block.value);
 
     return;
   }
 
-  async retrieveFile(fileMetadata) {
+  async retrieveFile(fileMetadata, cids) {
     const blocks = [];
-    for (const blockCID of fileMetadata.blocks) {
+    for (const blockCID of cids) {
       const block = await this.retrieveBlock(blockCID);
-      blocks.push(block);
+      console.log(block);
+      // blocks.push(block);
     }
-    const fileContent = Buffer.concat(blocks.map((b) => b.value));
-    await fs.writeFile(fileMetadata.name, fileContent);
-    console.log("File retrieved and saved:", fileMetadata.name);
-    return fileContent;
+    // const fileContent = Buffer.concat(blocks.map((b) => b.value));
+    // await fs.writeFile("out_" + fileMetadata.name, fileContent);
+    // console.log("File retrieved and saved:", fileMetadata.name);
+    // return fileContent;
   }
 
   async retrieveBlock(cid) {
