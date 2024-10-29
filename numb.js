@@ -20,6 +20,7 @@ import { BlockChain } from "./blockchain/blockchain.js";
 import { FileMetadata } from "./blockchain/fileMetadata.js";
 import { BlockIteme } from "./blockchain/block.js";
 import { DistributedUserIdentity } from "./user/DistributedUserIdentity.js";
+import { BlockStorage } from "./file/Filestorage.js";
 
 class FilecoinNode {
   constructor(listenPort) {
@@ -54,14 +55,16 @@ class FilecoinNode {
       },
     });
     this.DHT = new DHT(this.node);
-    // this.BlockChain = new BlockChain("./blockchain-db", this.DHT, this.node);
+    this.BlockChain = new BlockChain("./blockchain-db", this.DHT, this.node);
     this.DHT.start();
     // user manager
-    // this.DistributedUserIdentity = new DistributedUserIdentity(
-    //   this.node,
-    //   this.DHT
-    // );
-    // this.DistributedUserIdentity.start();
+    this.DistributedUserIdentity = new DistributedUserIdentity(
+      this.node,
+      this.DHT
+    );
+    this.BlockStorage = new BlockStorage();
+    this.BlockStorage.init();
+    this.DistributedUserIdentity.start();
 
     this.wallet = {
       address: crypto.randomBytes(20).toString("hex"),

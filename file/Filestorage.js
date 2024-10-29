@@ -106,5 +106,4 @@ class BlockStorage {
   }
 }
 
-// Export la classe
 export { BlockStorage };
