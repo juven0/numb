@@ -1,5 +1,8 @@
 
 /node_modules
+/users-db
+/blockchain-db
+/blockstore
 # Logs
 logs
 *.log

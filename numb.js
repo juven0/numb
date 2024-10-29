@@ -19,6 +19,8 @@ import { DHT } from "./dht/dht.js";
 import { BlockChain } from "./blockchain/blockchain.js";
 import { FileMetadata } from "./blockchain/fileMetadata.js";
 import { BlockIteme } from "./blockchain/block.js";
+import { DistributedUserIdentity } from "./user/DistributedUserIdentity.js";
+import { BlockStorage } from "./file/Filestorage.js";
 
 class FilecoinNode {
   constructor(listenPort) {
@@ -26,7 +28,7 @@ class FilecoinNode {
     this.wallet = null;
     this.storage = new Map();
     this.deals = new Map();
-    this.BLOCK_SIZE = 6 * 1024; // 256 KB
+    this.BLOCK_SIZE = 1024 * 1024;
     this.listenPort = listenPort;
   }
 
@@ -52,10 +54,17 @@ class FilecoinNode {
         },
       },
     });
-
     this.DHT = new DHT(this.node);
-    this.BlockChain = new BlockChain();
+    this.BlockChain = new BlockChain("./blockchain-db", this.DHT, this.node);
     this.DHT.start();
+    // user manager
+    this.DistributedUserIdentity = new DistributedUserIdentity(
+      this.node,
+      this.DHT
+    );
+    this.BlockStorage = new BlockStorage();
+    this.BlockStorage.init();
+    this.DistributedUserIdentity.start();
 
     this.wallet = {
       address: crypto.randomBytes(20).toString("hex"),
@@ -154,12 +163,12 @@ class FilecoinNode {
     const hash = crypto.createHash("sha256").update(fileContent).digest("hex");
     const fileMetaData = new FileMetadata(name, stats.size, hash);
 
-    const previousHash = this.BlockChain.getLasteBlock().hash;
-    const index = this.BlockChain.getLasteBlock().index;
+    // const previousHash = this.BlockChain.getLasteBlock().hash;
+    // const index = this.BlockChain.getLasteBlock().index;
 
     const newBlock = new BlockIteme(
-      index + 1,
-      previousHash,
+      1,
+      "gjjhghggkj",
       fileMetaData,
       Date.now(),
       [],
@@ -182,56 +191,38 @@ class FilecoinNode {
       await this.storeBlock(block);
     }
     newBlock.cids = Cids;
-    this.BlockChain.addBlock(newBlock);
-    console.log(this.BlockChain);
+    //test retrive file
+    await this.retrieveFile(newBlock.fileMetadata, newBlock.cids);
+
+    // this.BlockChain.addBlock(newBlock);
+    // console.log(this.BlockChain);
+
     return blocks;
   }
   async ensureDHTStarted() {
     const peerIds = await this.node.peerStore.all();
   }
   async storeBlock(block) {
-    this.DHT.put(block.cid, block);
-    // const providers = await this.node.contentRouting.provide(block.cid, {
-    //   timeout: 20000,
-    // });
-    // if (connections.length > 0) {
-    //   for (const provider of providers) {
-    //     try {
-    //       console.log("Envoi du bloc à un pair :", provider.id.toString());
-    //       const { stream } = await this.node.dialProtocol(
-    //         provider.id,
-    //         "/nebula/strorbloc/1.0.0"
-    //       );
-    //       await stream.sink.next(Buffer.from(JSON.stringify(block)));
-    //       await stream.close();
-    //       console.log("Bloc partagé avec le pair:", provider.id.toString());
-    //     } catch (err) {
-    //       console.error("Échec de l'envoi du bloc au pair:", err);
-    //     }
-    //   }
-    // }
+    console.log("storeBlock called with CID:", block.cid.toString());
+    console.log("Block value type:", typeof block.value);
+    console.log("Block value:", block.value);
 
-    // try {
-    //   // await this.ensureDHTStarted();
-    //   await this.node.contentRouting.provide(block.cid, { timeout: 20000 });
-    //   console.error("publier");
-    // } catch (err) {
-    //   console.error("Erreur lors de la publication du CID:", err);
-    // }
+    await this.DHT.put(block.cid, block.value);
 
     return;
   }
 
-  async retrieveFile(fileMetadata) {
+  async retrieveFile(fileMetadata, cids) {
     const blocks = [];
-    for (const blockCID of fileMetadata.blocks) {
+    for (const blockCID of cids) {
       const block = await this.retrieveBlock(blockCID);
-      blocks.push(block);
+      console.log(block);
+      // blocks.push(block);
     }
-    const fileContent = Buffer.concat(blocks.map((b) => b.value));
-    await fs.writeFile(fileMetadata.name, fileContent);
-    console.log("File retrieved and saved:", fileMetadata.name);
-    return fileContent;
+    // const fileContent = Buffer.concat(blocks.map((b) => b.value));
+    // await fs.writeFile("out_" + fileMetadata.name, fileContent);
+    // console.log("File retrieved and saved:", fileMetadata.name);
+    // return fileContent;
   }
 
   async retrieveBlock(cid) {
@@ -241,6 +232,14 @@ class FilecoinNode {
     } catch {
       console.log("error .. ");
     }
+  }
+
+  async createUser(username) {
+    return await this.DistributedUserIdentity.createUser(username);
+  }
+
+  async UserLogin(userId, privateKey) {
+    return await this.DistributedUserIdentity.login(userId, privateKey);
   }
 }
 

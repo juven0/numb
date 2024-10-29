@@ -3,9 +3,14 @@ import multer from "multer";
 import { FilecoinNode } from "./numb.js";
 import path from "path";
 import process from "process";
+import { error } from "console";
+import bodyParser from "body-parser";
 
 const app = express();
 const port = 3000;
+
+app.use(bodyParser.json());
+
 const upload = multer({ dest: "uploads/" });
 
 const filecoinNode = new FilecoinNode(4002);
@@ -14,7 +19,7 @@ await filecoinNode.init();
 app.use(express.static("public"));
 
 app.post("/upload", async (req, res) => {
-  const filePath = "./myDoc.txt";
+  const filePath = "./goland-2024.1.4.exe";
   const name = path.basename(filePath);
   try {
     const blocks = await filecoinNode.splitAndStoreFile(filePath, name);
@@ -41,6 +46,33 @@ app.get("/get", async (req, res) => {
   res.status(200).send({
     message: result,
   });
+});
+
+app.post("/user/create", async (req, res) => {
+  const userName = req.body.username;
+  try {
+    const newUser = await filecoinNode.createUser(userName);
+    res.status(200).send({
+      user: newUser,
+    });
+  } catch (error) {
+    res.status(500).send(`error to create ${userName}`);
+  }
+});
+
+app.post("/user/login", async (req, res) => {
+  const userInfo = req.body;
+  try {
+    const user = await filecoinNode.UserLogin(
+      userInfo.userid,
+      userInfo.privatekey
+    );
+    res.status(200).send({
+      user: user,
+    });
+  } catch (error) {
+    res.status(500).send(`login faild `);
+  }
 });
 
 app.listen(port, () => {

@@ -1,9 +1,24 @@
 import { BlockIteme } from "./block.js";
+import { BlockStorage } from "./blockStorage.js";
+import { BlockchainSynchronizer } from "./syncBlockchain.js";
 
 class BlockChain {
-  constructor() {
-    this.chain = [this.createGenesisBlock()];
+  constructor(dbPath, dht, node) {
+    this.storage = new BlockStorage(dbPath);
     this.fileMetadataMap = new Map();
+    this.dht = dht;
+    this.node = node;
+    this.synchronizer = new BlockchainSynchronizer(this, dht, this.node);
+    this.initialize();
+  }
+
+  async initialize() {
+    const lastHash = await this.storage.getLastBlockHash();
+    if (!lastHash) {
+      const genesisBlock = this.createGenesisBlock();
+      await this.storage.saveBlock(genesisBlock);
+    }
+    await this.synchronizer.start();
   }
 
   createGenesisBlock() {
@@ -11,7 +26,7 @@ class BlockChain {
   }
 
   getLasteBlock() {
-    return this.chain[this.chain.length - 1];
+    //return this.storage.
   }
 
   addBlock(newBlock) {
