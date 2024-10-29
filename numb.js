@@ -26,7 +26,7 @@ class FilecoinNode {
     this.wallet = null;
     this.storage = new Map();
     this.deals = new Map();
-    this.BLOCK_SIZE = 256 * 1024; // 256 KB
+    this.BLOCK_SIZE = 6 * 1024; // 256 KB
     this.listenPort = listenPort;
   }
 
