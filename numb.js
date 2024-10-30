@@ -63,21 +63,22 @@ class FilecoinNode {
       },
     });
     this.DHT = new DHT(this.node);
-    this.BlockChain = new BlockChain(
-      this.storePath + "/blockchain-db",
-      this.DHT,
-      this.node
-    );
-    this.BlockChain.initialize();
-    this.DHT.start();
-    // user manager
-    // this.DistributedUserIdentity = new DistributedUserIdentity(
-    //   this.node,
-    //   this.DHT
+    // this.BlockChain = new BlockChain(
+    //   this.storePath + "/blockchain-db",
+    //   this.DHT,
+    //   this.node
     // );
+    // this.BlockChain.initialize();
+    this.DHT.start();
+    //user manager
+    this.DistributedUserIdentity = new DistributedUserIdentity(
+      this.node,
+      this.DHT,
+      this.storePath
+    );
+    this.DistributedUserIdentity.start();
     // this.BlockStorage = new BlockStorage();
     // this.BlockStorage.init();
-    // this.DistributedUserIdentity.start();
 
     this.wallet = {
       address: crypto.randomBytes(20).toString("hex"),

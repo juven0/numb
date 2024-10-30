@@ -17,7 +17,6 @@ class DistributedUserIdentity {
 
   async init() {
     try {
-      // Créer et ouvrir la base de données
       this.db = new Level(this.dbPath, { valueEncoding: "json" });
       await this.db.open();
       this.isInitialized = true;
@@ -32,23 +31,26 @@ class DistributedUserIdentity {
     if (!this.isInitialized) {
       await this.init();
     }
-    await this.db.open();
-    await this.node.handle(this.usersTopic, this._handleUserSync.bind(this));
+
+    // Enregistrer les gestionnaires de protocole
+    await this.node.handle(
+      "/users/sync-summary",
+      this._handleSyncSummary.bind(this)
+    );
+    await this.node.handle("/users/fetch", this._handleFetchUsers.bind(this));
+    await this.node.handle("/users/send", this._handleReceiveUsers.bind(this));
     await this.node.handle(
       this.validationTopic,
       this._handleUserValidation.bind(this)
     );
 
-    await this._syncWithNetwork();
+    // Démarrer la synchronisation périodique
+    setInterval(() => this._syncWithNetwork(), 30000);
+    console.log("DistributedUserIdentity started");
   }
 
   async createUser(username) {
     try {
-      //   const existingUser = await this._checkUserExistsInNetwork(username);
-      //   if (existingUser) {
-      //     throw new Error("Username already exists in the network");
-      //   }
-
       const { publicKey, privateKey } = generateKeyPairSync("ed25519", {
         publicKeyEncoding: { type: "spki", format: "pem" },
         privateKeyEncoding: { type: "pkcs8", format: "pem" },
@@ -65,6 +67,7 @@ class DistributedUserIdentity {
         username,
         publicKey,
         createdAt: Date.now(),
+        lastUpdated: Date.now(),
         role: "user",
         isActive: true,
         nodeId: this.node.peerId.toString(),
@@ -72,16 +75,6 @@ class DistributedUserIdentity {
       };
 
       await this.db.put(userId, { ...user, privateKey });
-
-      //wait for other peer
-
-      //   await this._propagateUserToNetwork(user);
-
-      //   const isValidated = await this._waitForNetworkValidation(userId);
-      //   if (!isValidated) {
-      //     await this.db.del(userId);
-      //     throw new Error("User creation was not validated by the network");
-      //   }
 
       return {
         userId,
@@ -97,98 +90,161 @@ class DistributedUserIdentity {
   }
 
   async login(userId, privateKey) {
-    const user = await this.getUser(userId);
-    if (user != null) {
-      return {
-        userId: user.userId,
-        username: user.username,
-        publicKey: user.publicKey,
-        credentials: this._generateCredentials(userId, privateKey),
-      };
-    } else {
+    try {
+      const user = await this.getUser(userId);
+      if (user) {
+        return {
+          userId: user.userId,
+          username: user.username,
+          publicKey: user.publicKey,
+          credentials: this._generateCredentials(userId, privateKey),
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error("Error during login:", error);
       return null;
     }
   }
 
-  async _handleUserSync({ stream }) {
+  async _syncWithNetwork() {
     try {
-      const message = await this._readStream(stream);
-      const userData = JSON.parse(message);
+      const peers = await this.dht._findClosestPeers(
+        this.node.peerId.toString()
+      );
+      console.log("Found peers for sync:", peers.length);
 
-      if (await this._verifyUserData(userData)) {
-        await this._storeUserData(userData);
-        await stream.sink([
-          uint8ArrayFromString(JSON.stringify({ status: "success" })),
-        ]);
-      } else {
-        await stream.sink([
-          uint8ArrayFromString(JSON.stringify({ status: "invalid" })),
-        ]);
-      }
-    } catch (error) {
-      console.error("Error handling user sync:", error);
-    } finally {
-      await stream.close();
-    }
-  }
+      const localUsers = await this._getUserSummaries();
 
-  async _handleUserValidation({ stream }) {
-    try {
-      const message = await this._readStream(stream);
-      const { userId, validatorId, signature } = JSON.parse(message);
+      for (const peer of peers) {
+        try {
+          console.log("Syncing with peer:", peer.id.toString());
+          const connection = await this.node.dial(peer.id);
 
-      if (await this._verifyValidation(userId, validatorId, signature)) {
-        const user = await this.getUser(userId);
-        if (user && !user.validations.includes(validatorId)) {
-          user.validations.push(validatorId);
-          await this.db.put(userId, user);
-          await stream.sink([
-            uint8ArrayFromString(JSON.stringify({ status: "validated" })),
-          ]);
+          // Échanger les résumés
+          const stream = await connection.newStream("/users/sync-summary");
+          await stream.sink([uint8ArrayFromString(JSON.stringify(localUsers))]);
+
+          const peerSummaryData = await this._readStream(stream);
+          const peerUsers = JSON.parse(peerSummaryData);
+
+          const { toFetch, toSend } = this._compareUserSummaries(
+            localUsers,
+            peerUsers
+          );
+
+          // Échanger les utilisateurs manquants
+          if (toFetch.length > 0) {
+            await this._fetchMissingUsers(peer, toFetch);
+          }
+          if (toSend.length > 0) {
+            await this._sendMissingUsers(peer, toSend);
+          }
+
+          await stream.close();
+        } catch (error) {
+          console.error(
+            `Failed to sync with peer ${peer.id.toString()}:`,
+            error
+          );
         }
       }
     } catch (error) {
-      console.error("Error handling user validation:", error);
-    } finally {
+      console.error("Error in network synchronization:", error);
+    }
+  }
+
+  async _getUserSummaries() {
+    try {
+      const users = await this.db.values().all();
+      return users.map((user) => ({
+        userId: user.userId,
+        lastUpdated: user.lastUpdated || user.createdAt,
+        validations: user.validations?.length || 0,
+      }));
+    } catch (error) {
+      console.error("Error getting user summaries:", error);
+      return [];
+    }
+  }
+
+  _compareUserSummaries(localUsers, peerUsers) {
+    const toFetch = [];
+    const toSend = [];
+
+    const localMap = new Map(localUsers.map((u) => [u.userId, u]));
+    const peerMap = new Map(peerUsers.map((u) => [u.userId, u]));
+
+    for (const peerUser of peerUsers) {
+      const localUser = localMap.get(peerUser.userId);
+      if (
+        !localUser ||
+        localUser.lastUpdated < peerUser.lastUpdated ||
+        localUser.validations < peerUser.validations
+      ) {
+        toFetch.push(peerUser.userId);
+      }
+    }
+
+    for (const localUser of localUsers) {
+      const peerUser = peerMap.get(localUser.userId);
+      if (
+        !peerUser ||
+        peerUser.lastUpdated < localUser.lastUpdated ||
+        peerUser.validations < localUser.validations
+      ) {
+        toSend.push(localUser.userId);
+      }
+    }
+
+    return { toFetch, toSend };
+  }
+
+  async _handleSyncSummary({ stream }) {
+    try {
+      const summaryData = await this._readStream(stream);
+      const peerSummary = JSON.parse(summaryData);
+
+      const localSummary = await this._getUserSummaries();
+      await stream.sink([uint8ArrayFromString(JSON.stringify(localSummary))]);
+
       await stream.close();
+    } catch (error) {
+      console.error("Error handling sync summary:", error);
     }
   }
 
-  async _propagateUserToNetwork(user) {
-    const peers = await this.dht._findClosestPeers(user.userId);
-    for (const peer of peers) {
-      try {
-        const connection = await this.node.dial(peer.id);
-        const stream = await connection.newStream(this.usersTopic);
-        await stream.sink([uint8ArrayFromString(JSON.stringify(user))]);
-        await stream.close();
-      } catch (error) {
-        console.error(`Failed to propagate user to peer ${peer.id}:`, error);
+  async _handleFetchUsers({ stream }) {
+    try {
+      const request = await this._readStream(stream);
+      const { userIds } = JSON.parse(request);
+
+      const users = await Promise.all(
+        userIds.map((userId) => this.getUser(userId))
+      );
+
+      await stream.sink([uint8ArrayFromString(JSON.stringify(users))]);
+      await stream.close();
+    } catch (error) {
+      console.error("Error handling fetch users:", error);
+    }
+  }
+
+  async _handleReceiveUsers({ stream }) {
+    try {
+      const userData = await this._readStream(stream);
+      const users = JSON.parse(userData);
+
+      for (const user of users) {
+        if (await this._verifyUserData(user)) {
+          await this._storeUserData(user);
+        }
       }
-    }
-  }
 
-  async _syncWithNetwork() {
-    const peers = await this.dht._findClosestPeers(this.node.peerId.toString());
-    for (const peer of peers) {
-      try {
-        const connection = await this.node.dial(peer.id);
-        const stream = await connection.newStream("/users/sync/1.0.0");
-        const users = await this.db.values().all();
-        await stream.sink([uint8ArrayFromString(JSON.stringify(users))]);
-        await stream.close();
-      } catch (error) {
-        console.error(`Failed to sync with peer ${peer.id}:`, error);
-      }
+      await stream.close();
+    } catch (error) {
+      console.error("Error handling receive users:", error);
     }
-  }
-
-  async _readStream(stream) {
-    let data = "";
-    for await (const chunk of stream.source) {
-      data += uint8ArrayToString(chunk.subarray());
-    }
-    return data;
   }
 
   _generateCredentials(userId, privateKey) {
@@ -200,9 +256,6 @@ class DistributedUserIdentity {
       };
 
       const tokenString = JSON.stringify(token);
-
-      const sign = crypto.createSign("SHA256");
-      sign.update(tokenString);
       const signature = crypto.sign(null, Buffer.from(tokenString), privateKey);
 
       return {
@@ -221,9 +274,12 @@ class DistributedUserIdentity {
       const user = await this.getUser(userId);
       if (!user) return false;
 
-      const verify = crypto.createVerify("SHA256");
-      verify.update(token);
-      return verify.verify(user.publicKey, signature, "hex");
+      return crypto.verify(
+        null,
+        Buffer.from(token),
+        user.publicKey,
+        Buffer.from(signature, "hex")
+      );
     } catch (error) {
       console.error("Error verifying credentials:", error);
       return false;
@@ -233,8 +289,9 @@ class DistributedUserIdentity {
   async getUser(userId) {
     try {
       const user = await this.db.get(userId);
-      delete user.privateKey;
-      return user;
+      const publicUser = { ...user };
+      delete publicUser.privateKey;
+      return publicUser;
     } catch (error) {
       return null;
     }
@@ -242,8 +299,6 @@ class DistributedUserIdentity {
 
   async _storeUserData(userData) {
     try {
-      console.log("Storing user data:", userData.userId);
-
       const existingUser = await this.getUser(userData.userId);
       if (existingUser) {
         const updatedUser = {
@@ -263,14 +318,169 @@ class DistributedUserIdentity {
         console.log("Stored new user:", userData.userId);
       }
 
-      // Ajouter à la DHT pour la réplication
-      //   await this._storeUserInDHT(userData);
-
       return true;
     } catch (error) {
       console.error("Error storing user data:", error);
       return false;
     }
+  }
+
+  async _verifyUserData(userData) {
+    try {
+      if (!userData || typeof userData !== "object") {
+        return false;
+      }
+
+      const requiredFields = [
+        "userId",
+        "username",
+        "publicKey",
+        "createdAt",
+        "nodeId",
+      ];
+      for (const field of requiredFields) {
+        if (!userData[field]) {
+          return false;
+        }
+      }
+
+      if (
+        typeof userData.userId !== "string" ||
+        userData.userId.length !== 16
+      ) {
+        return false;
+      }
+
+      if (!userData.publicKey.includes("BEGIN PUBLIC KEY")) {
+        return false;
+      }
+
+      if (!Number.isInteger(userData.createdAt) || userData.createdAt <= 0) {
+        return false;
+      }
+
+      if (
+        typeof userData.nodeId !== "string" ||
+        !userData.nodeId.startsWith("12D3")
+      ) {
+        return false;
+      }
+
+      if (userData.validations && !Array.isArray(userData.validations)) {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error in _verifyUserData:", error);
+      return false;
+    }
+  }
+
+  async _handleUserValidation({ stream }) {
+    try {
+      const message = await this._readStream(stream);
+      const { userId, validatorId, signature } = JSON.parse(message);
+
+      const user = await this.getUser(userId);
+      if (user && !user.validations.includes(validatorId)) {
+        user.validations.push(validatorId);
+        await this.db.put(userId, user);
+        await stream.sink([
+          uint8ArrayFromString(JSON.stringify({ status: "validated" })),
+        ]);
+      }
+    } catch (error) {
+      console.error("Error handling user validation:", error);
+    } finally {
+      await stream.close();
+    }
+  }
+
+  async _readStream(stream) {
+    let data = "";
+    for await (const chunk of stream.source) {
+      data += uint8ArrayToString(chunk.subarray());
+    }
+    return data;
+  }
+
+  // Ajoutez ces méthodes dans votre classe DistributedUserIdentity
+
+  async _fetchMissingUsers(peer, userIds) {
+    try {
+      console.log(
+        `Fetching ${
+          userIds.length
+        } missing users from peer ${peer.id.toString()}`
+      );
+      const connection = await this.node.dial(peer.id);
+      const stream = await connection.newStream("/users/fetch");
+
+      // Demander les utilisateurs
+      await stream.sink([uint8ArrayFromString(JSON.stringify({ userIds }))]);
+
+      // Recevoir les utilisateurs
+      const userData = await this._readStream(stream);
+      const users = JSON.parse(userData);
+
+      console.log(`Received ${users.length} users from peer`);
+
+      // Stocker les utilisateurs reçus
+      for (const user of users) {
+        if (await this._verifyUserData(user)) {
+          await this._storeUserData(user);
+          console.log(`Stored user ${user.userId} from peer`);
+        } else {
+          console.log(`Invalid user data received for ${user.userId}`);
+        }
+      }
+
+      await stream.close();
+    } catch (error) {
+      console.error("Error fetching missing users:", error);
+    }
+  }
+
+  async _sendMissingUsers(peer, userIds) {
+    try {
+      console.log(
+        `Sending ${userIds.length} users to peer ${peer.id.toString()}`
+      );
+      const connection = await this.node.dial(peer.id);
+      const stream = await connection.newStream("/users/send");
+
+      // Obtenir les données des utilisateurs
+      const users = await Promise.all(
+        userIds.map(async (userId) => {
+          const user = await this.getUser(userId);
+          if (user) {
+            // S'assurer que la clé privée n'est pas envoyée
+            const { privateKey, ...publicUserData } = user;
+            return publicUserData;
+          }
+          return null;
+        })
+      );
+
+      // Filtrer les utilisateurs null
+      const validUsers = users.filter((user) => user !== null);
+      console.log(`Sending ${validUsers.length} valid users to peer`);
+
+      // Envoyer les utilisateurs
+      await stream.sink([uint8ArrayFromString(JSON.stringify(validUsers))]);
+      await stream.close();
+
+      console.log("Successfully sent users to peer");
+    } catch (error) {
+      console.error("Error sending missing users:", error);
+    }
+  }
+
+  // Vous pouvez aussi ajouter cette méthode utilitaire pour la journalisation
+  _logPeerOperation(operation, peerId, message) {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] ${operation} with peer ${peerId}: ${message}`);
   }
 }
 

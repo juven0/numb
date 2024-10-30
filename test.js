@@ -20,7 +20,7 @@ app.use(cors(corsOptions));
 
 const upload = multer({ dest: "uploads/" });
 
-const filecoinNode = new FilecoinNode(4002, "");
+const filecoinNode = new FilecoinNode(4002, "./test");
 await filecoinNode.init();
 
 app.use(express.static("public"));

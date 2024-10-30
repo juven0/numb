@@ -4,6 +4,7 @@
 /blockchain-db/*
 /blockstore/*
 /a/*
+/test/*
 # Logs
 logs
 *.log
