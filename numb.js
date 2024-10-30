@@ -71,14 +71,14 @@ class FilecoinNode {
     // this.BlockChain.initialize();
     this.DHT.start();
     //user manager
-    this.DistributedUserIdentity = new DistributedUserIdentity(
-      this.node,
-      this.DHT,
-      this.storePath
-    );
-    this.DistributedUserIdentity.start();
-    // this.BlockStorage = new BlockStorage();
-    // this.BlockStorage.init();
+    // this.DistributedUserIdentity = new DistributedUserIdentity(
+    //   this.node,
+    //   this.DHT,
+    //   this.storePath
+    // );
+    // this.DistributedUserIdentity.start();
+    this.BlockStorage = new BlockStorage(this.storePath);
+    this.BlockStorage.init();
 
     this.wallet = {
       address: crypto.randomBytes(20).toString("hex"),

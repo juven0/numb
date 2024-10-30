@@ -3,7 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 
 class BlockStorage {
-  constructor(storageDir = "./blockstore") {
+  constructor(storageDir = "/blockstore") {
     this.storageDir = storageDir;
     this.db = new Level(path.join(storageDir, "blocks.db"), {
       valueEncoding: "json",
