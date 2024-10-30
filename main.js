@@ -8,7 +8,8 @@ async function main() {
   }
 
   const port = parseInt(process.argv[2]);
-  const node = new FilecoinNode(port);
+  const storepath = process.argv[3];
+  const node = new FilecoinNode(port, storepath);
 
   try {
     await node.init();

@@ -5,15 +5,22 @@ import path from "path";
 import process from "process";
 import { error } from "console";
 import bodyParser from "body-parser";
+import cors from "cors";
 
 const app = express();
 const port = 3000;
 
+const corsOptions = {
+  origin: "*",
+  optionsSuccessStatus: 200,
+};
+
 app.use(bodyParser.json());
+app.use(cors(corsOptions));
 
 const upload = multer({ dest: "uploads/" });
 
-const filecoinNode = new FilecoinNode(4002);
+const filecoinNode = new FilecoinNode(4002, "");
 await filecoinNode.init();
 
 app.use(express.static("public"));

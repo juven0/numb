@@ -23,19 +23,27 @@ import { DistributedUserIdentity } from "./user/DistributedUserIdentity.js";
 import { BlockStorage } from "./file/Filestorage.js";
 
 class FilecoinNode {
-  constructor(listenPort) {
+  constructor(listenPort, storePath = "./") {
     this.node = null;
     this.wallet = null;
     this.storage = new Map();
     this.deals = new Map();
     this.BLOCK_SIZE = 1024 * 1024;
     this.listenPort = listenPort;
+    this.storePath = storePath;
   }
 
   async init() {
     this.node = await createLibp2p({
       addresses: {
-        listen: [`/ip4/0.0.0.0/tcp/${this.listenPort}`],
+        listen: [
+          `/ip4/0.0.0.0/tcp/${this.listenPort}`,
+          `/ip6/::/tcp/${this.listenPort}`,
+        ],
+        announce: [
+          `/ip4/0.0.0.0/tcp/${this.listenPort}`,
+          `/ip6/::/tcp/${this.listenPort}`,
+        ],
       },
       transports: [tcp()],
       streamMuxers: [yamux()],
@@ -55,7 +63,12 @@ class FilecoinNode {
       },
     });
     this.DHT = new DHT(this.node);
-    // this.BlockChain = new BlockChain("./blockchain-db", this.DHT, this.node);
+    this.BlockChain = new BlockChain(
+      this.storePath + "/blockchain-db",
+      this.DHT,
+      this.node
+    );
+    this.BlockChain.initialize();
     this.DHT.start();
     // user manager
     // this.DistributedUserIdentity = new DistributedUserIdentity(

@@ -9,28 +9,107 @@ class BlockChain {
     this.dht = dht;
     this.node = node;
     this.synchronizer = new BlockchainSynchronizer(this, dht, this.node);
-    this.initialize();
   }
 
   async initialize() {
-    const lastHash = await this.storage.getLastBlockHash();
-    if (!lastHash) {
-      const genesisBlock = this.createGenesisBlock();
-      await this.storage.saveBlock(genesisBlock);
+    try {
+      // Initialiser le stockage
+      await this.storage.init();
+
+      // Vérifier si nous avons déjà un bloc genesis
+      const lastHash = await this.storage.getLastBlockHash();
+      if (!lastHash) {
+        console.log("Creating genesis block");
+        const genesisBlock = this.createGenesisBlock();
+        await this.storage.saveBlock(genesisBlock);
+      }
+
+      // Démarrer le synchroniseur
+      await this.synchronizer.start();
+      console.log("Blockchain initialized successfully");
+    } catch (error) {
+      console.error("Error initializing blockchain:", error);
+      throw error;
     }
-    await this.synchronizer.start();
   }
 
   createGenesisBlock() {
-    return new BlockIteme(0, "0", Date.now(), [], []);
+    return new BlockIteme(0, "0", null, Date.now(), [], []);
   }
 
-  getLasteBlock() {
-    //return this.storage.
+  async getLasteBlock() {
+    try {
+      const lastHash = await this.storage.getLastBlockHash();
+      if (!lastHash) return null;
+      return await this.storage.getBlock(lastHash);
+    } catch (error) {
+      console.error("Error getting last block:", error);
+      return null;
+    }
   }
 
-  addBlock(newBlock) {
-    this.chain.push(newBlock);
+  async addBlock(newBlock) {
+    try {
+      // Vérifier si le bloc existe déjà
+      const existingBlock = await this.storage.getBlock(newBlock.hash);
+      if (existingBlock) {
+        console.log("Block already exists:", newBlock.hash);
+        return false;
+      }
+
+      // Vérifier le lien avec le bloc précédent
+      const lastBlock = await this.getLasteBlock();
+      if (lastBlock && newBlock.previousHash !== lastBlock.hash) {
+        throw new Error("Invalid previous hash");
+      }
+
+      // Sauvegarder le bloc
+      await this.storage.saveBlock(newBlock);
+      console.log("Block added successfully:", newBlock.hash);
+      return true;
+    } catch (error) {
+      console.error("Error adding block:", error);
+      throw error;
+    }
+  }
+
+  async getBlock(hash) {
+    try {
+      return await this.storage.getBlock(hash);
+    } catch (error) {
+      console.error("Error getting block:", error);
+      return null;
+    }
+  }
+
+  async getAllBlocks() {
+    try {
+      return await this.storage.getAllBlocks();
+    } catch (error) {
+      console.error("Error getting all blocks:", error);
+      return [];
+    }
+  }
+
+  async getBlocksAfter(hash) {
+    try {
+      const blocks = [];
+      const allBlocks = await this.getAllBlocks();
+
+      let foundStartBlock = false;
+      for (const block of allBlocks) {
+        if (hash === null || foundStartBlock) {
+          blocks.push(block);
+        } else if (block.hash === hash) {
+          foundStartBlock = true;
+        }
+      }
+
+      return blocks;
+    } catch (error) {
+      console.error("Error getting blocks after hash:", error);
+      return [];
+    }
   }
 
   getFileMetadata(cid) {
@@ -49,21 +128,29 @@ class BlockChain {
     }
   }
 
-  isChainValid() {
-    for (let i = 1; i < this.chain.length; i++) {
-      const currentBlock = this.chain[i];
-      const previousBlock = this.chain[i - 1];
+  async isChainValid() {
+    try {
+      const blocks = await this.getAllBlocks();
 
-      if (currentBlock.hash !== currentBlock.calculateHash()) {
-        return false;
-      }
+      for (let i = 1; i < blocks.length; i++) {
+        const currentBlock = blocks[i];
+        const previousBlock = blocks[i - 1];
 
-      if (currentBlock.previousHash !== previousBlock.hash) {
-        return false;
+        if (currentBlock.hash !== currentBlock.calculateHash()) {
+          console.error("Invalid hash at block:", i);
+          return false;
+        }
+
+        if (currentBlock.previousHash !== previousBlock.hash) {
+          console.error("Invalid previous hash at block:", i);
+          return false;
+        }
       }
+      return true;
+    } catch (error) {
+      console.error("Error validating chain:", error);
+      return false;
     }
-    return true;
   }
 }
-
 export { BlockChain };

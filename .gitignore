@@ -3,6 +3,7 @@
 /users-db/*
 /blockchain-db/*
 /blockstore/*
+/a/*
 # Logs
 logs
 *.log
