@@ -62,7 +62,10 @@ class FilecoinNode {
         },
       },
     });
-    this.DHT = new DHT(this.node);
+    this.BlockStorage = new BlockStorage(this.storePath);
+    this.BlockStorage.init();
+
+    this.DHT = new DHT(this.node, this.BlockStorage);
     // this.BlockChain = new BlockChain(
     //   this.storePath + "/blockchain-db",
     //   this.DHT,
@@ -77,8 +80,6 @@ class FilecoinNode {
     //   this.storePath
     // );
     // this.DistributedUserIdentity.start();
-    this.BlockStorage = new BlockStorage(this.storePath);
-    this.BlockStorage.init();
 
     this.wallet = {
       address: crypto.randomBytes(20).toString("hex"),
@@ -226,19 +227,165 @@ class FilecoinNode {
     return;
   }
 
-  async retrieveFile(fileMetadata, cids) {
-    const blocks = [];
-    for (const blockCID of cids) {
-      const block = await this.retrieveBlock(blockCID);
-      console.log(block);
-      // blocks.push(block);
+  async retrieveAndSaveFile(fileHash = "fg", outputPath = null) {
+    try {
+      console.log("Retrieving file with hash:", fileHash);
+
+      const fileData = await this.retrieveFileByHash(fileHash);
+      if (!fileData) {
+        console.log("File not found or corrupted");
+        return null;
+      }
+
+      // Sauvegarder le fichier
+      const savedPath = await this.saveRetrievedFile(fileData, outputPath);
+      console.log(`File retrieved and saved to: ${savedPath}`);
+
+      // return {
+      //   path: savedPath,
+      //   name: fileData.name,
+      //   size: fileData.size,
+      //   hash: fileData.hash,
+      // };
+      return savedPath;
+    } catch (error) {
+      console.error("Error retrieving and saving file:", error);
+      throw error;
     }
-    // const fileContent = Buffer.concat(blocks.map((b) => b.value));
-    // await fs.writeFile("out_" + fileMetadata.name, fileContent);
-    // console.log("File retrieved and saved:", fileMetadata.name);
-    // return fileContent;
   }
 
+  // async retrieveFileByHash(fileHash) {
+  //   try {
+  //     // console.log("Retrieving file with hash:", fileHash);
+
+  //     // // 1. D'abord récupérer les métadonnées du fichier depuis la blockchain
+  //     // const fileMetadata = await this._findFileMetadataByHash(fileHash);
+  //     // if (!fileMetadata) {
+  //     //   console.log("File metadata not found for hash:", fileHash);
+  //     //   return null;
+  //     // }
+
+  //     // console.log("Found file metadata:", {
+  //     //   name: fileMetadata.name,
+  //     //   size: fileMetadata.size,
+  //     //   hash: fileMetadata.hash
+  //     // });
+
+  //     // 2. Récupérer les CIDs des blocs associés
+  //     // const blockCids = await this._getBlockCidsForFile(fileHash);
+  //     // if (!blockCids || blockCids.length === 0) {
+  //     //   console.log("No blocks found for file");
+  //     //   return null;
+  //     // }
+
+  //     // console.log(`Found ${blockCids.length} blocks for file`);
+
+  //     // 3. Récupérer tous les blocs
+  //     const blockCids = [
+  //       "bafyreichojz7lvy3oplonaeubvk5wbo7se3p35mweswxx22r7yefdtc5xa",
+  //       "bafyreieo5woddecktotuqit3xe7zymzxb75hicufonq7smk466vx4woexu",
+  //     ];
+  //     const blocks = [];
+  //     for (const cid of blockCids) {
+  //       const blockData = await this.DHT.get(cid);
+  //       if (!blockData) {
+  //         console.error(`Failed to retrieve block with CID: ${cid}`);
+  //         return null;
+  //       }
+  //       blocks.push(blockData);
+  //     }
+
+  //     // 4. Reconstituer le fichier
+  //     const fileData = Buffer.concat(blocks.map((b) => Buffer.from(b)));
+  //     // return fileData;
+  //     // 5. Vérifier l'intégrité
+  //     // const reconstructedHash = crypto
+  //     //   .createHash("sha256")
+  //     //   .update(fileData)
+  //     //   .digest("hex");
+
+  //     // if (reconstructedHash !== fileHash) {
+  //     //   console.error("File integrity check failed");
+  //     //   return null;
+  //     // }
+
+  //     // console.log("File retrieved successfully");
+  //     // return {
+  //     //   name: fileMetadata.name,
+  //     //   data: fileData,
+  //     //   size: fileData.length,
+  //     //   hash: fileHash
+  //     // };
+  //     return {
+  //       name: "test_out.jpg",
+  //       data: fileData,
+  //     };
+  //   } catch (error) {
+  //     console.error("Error retrieving file by hash:", error);
+  //     throw error;
+  //   }
+  // }
+
+  async retrieveFileByHash(fileHash) {
+    try {
+      const blockCids = [
+        "bafyreieo5woddecktotuqit3xe7zymzxb75hicufonq7smk466vx4woexu",
+        "bafyreichojz7lvy3oplonaeubvk5wbo7se3p35mweswxx22r7yefdtc5xa",
+      ];
+      const fileChunks = [];
+      for (const cid of blockCids) {
+        const blockData = await this.DHT.get(cid);
+        if (!blockData) {
+          console.error(`Failed to retrieve block with CID: ${cid}`);
+          continue;
+        }
+        fileChunks.push(blockData);
+      }
+
+      if (fileChunks.length !== blockCids.length) {
+        console.error("Some blocks are missing");
+        return null;
+      }
+
+      const fileBuffer = Buffer.concat(
+        fileChunks.map((chunk) => {
+          if (typeof chunk === "string") {
+            try {
+              const parsed = JSON.parse(chunk);
+              return Buffer.from(parsed);
+            } catch {
+              return Buffer.from(chunk);
+            }
+          }
+          return Buffer.from(chunk);
+        })
+      );
+
+      return {
+        data: fileBuffer,
+        name: "myout.jpg",
+      };
+    } catch (error) {
+      console.error("Error retrieving file by hash:", error);
+      throw error;
+    }
+  }
+
+  async saveRetrievedFile(fileData, outputPath = "./out/") {
+    try {
+      const dataBuffer = Buffer.isBuffer(fileData.data)
+        ? fileData.data
+        : Buffer.from(fileData.data);
+
+      const filePath = outputPath + fileData.name;
+      await fs.writeFile(filePath, fileData.data);
+      console.log(`File saved to: ${filePath}`);
+      return filePath;
+    } catch (error) {
+      console.error("Error saving file:", error);
+      throw error;
+    }
+  }
   async retrieveBlock(cid) {
     try {
       const value = await this.DHT.get(cid);

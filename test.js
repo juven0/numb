@@ -46,9 +46,7 @@ app.post("/upload", async (req, res) => {
 });
 
 app.get("/get", async (req, res) => {
-  const result = await filecoinNode.retrieveBlock(
-    "bafyreidgewugbq56jvrfgyyxwq6dqywmum6tqzp45nftduwze4dyakoibi"
-  );
+  const result = await filecoinNode.retrieveAndSaveFile("dsfds", "./out/");
 
   res.status(200).send({
     message: result,
