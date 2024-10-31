@@ -152,6 +152,8 @@ class DHT {
   }
 
   async _handleGet({ stream }) {
+    let isStreamOpen = true;
+
     try {
       const message = await stream.source.next();
       if (!message || !message.value) {
@@ -167,35 +169,44 @@ class DHT {
 
       const value = await this.storage.getBlock(normalizedKey);
 
-      if (value) {
+      if (value && isStreamOpen) {
         const valueString = value.toString();
-        const chunks = this._chunkString(valueString);
-        console.log(`Sending ${chunks.length} chunks`);
+        const chunks = this._chunkString(valueString, 1024); // Réduire la taille des chunks
+        console.log(`Preparing to send ${chunks.length} chunks`);
 
-        try {
-          // Envoyer tous les chunks dans une seule opération
-          const chunkData = chunks.map((chunk, index) => ({
+        // Créer un seul gros message avec tous les chunks
+        const fullMessage = {
+          type: "full_response",
+          chunks: chunks.map((chunk, index) => ({
             value: chunk,
-            chunkIndex: index,
-            totalChunks: chunks.length,
-          }));
+            index: index,
+          })),
+          totalChunks: chunks.length,
+        };
 
-          await stream.sink([uint8ArrayFromString(JSON.stringify(chunkData))]);
-
-          console.log(`Successfully sent all ${chunks.length} chunks`);
-        } catch (error) {
-          console.error("Error sending chunks:", error);
-          throw error;
+        // Envoyer tout en une fois
+        if (isStreamOpen) {
+          await stream.sink([
+            uint8ArrayFromString(JSON.stringify(fullMessage)),
+          ]);
+          console.log("Successfully sent all chunks in one message");
         }
       } else {
-        console.log("Data not found");
-        await stream.sink([
-          uint8ArrayFromString(JSON.stringify({ value: null })),
-        ]);
+        if (isStreamOpen) {
+          await stream.sink([
+            uint8ArrayFromString(
+              JSON.stringify({
+                type: "error",
+                message: "Data not found",
+              })
+            ),
+          ]);
+        }
       }
     } catch (error) {
       console.error("Error handling get:", error);
     } finally {
+      isStreamOpen = false;
       try {
         await stream.close();
       } catch (closeError) {
@@ -249,12 +260,12 @@ class DHT {
     const normalizedKey = this._normalizeKey(key);
 
     try {
-      // Essayer d'abord de récupérer localement
-      const localData = await this.storage.getBlock(normalizedKey);
-      if (localData) {
-        console.log("Data found locally");
-        return localData.toString();
-      }
+      // Vérifier d'abord localement
+      // const localData = await this.storage.getBlock(normalizedKey);
+      // if (localData) {
+      //   console.log("Data found locally");
+      //   return localData.toString();
+      // }
 
       console.log("Data not found locally, trying peers");
       const closestPeers = await this._findClosestPeers(normalizedKey);
@@ -273,20 +284,19 @@ class DHT {
             continue;
           }
 
-          if (Array.isArray(response)) {
+          if (response.type === "full_response") {
             // Reconstituer les données à partir des chunks
-            const orderedData = response
-              .sort((a, b) => a.chunkIndex - b.chunkIndex)
-              .map((chunk) => chunk.value)
-              .join("");
+            const orderedChunks = response.chunks
+              .sort((a, b) => a.index - b.index)
+              .map((chunk) => chunk.value);
 
-            // Stocker localement pour les futures requêtes
-            await this.storage.storeBlock(normalizedKey, orderedData);
+            const completeData = orderedChunks.join("");
+
+            // Stocker localement
+            await this.storage.storeBlock(normalizedKey, completeData);
 
             await stream.close();
-            return orderedData;
-          } else if (response.value === null) {
-            console.log("Peer does not have the data");
+            return completeData;
           }
 
           await stream.close();
@@ -305,19 +315,46 @@ class DHT {
   async _readStreamResponse(stream) {
     try {
       const message = await stream.source.next();
-      if (!message || !message.value) return null;
+      if (!message || !message.value || message.done) return null;
 
       const value = message.value;
       const decodedData = uint8ArrayToString(
         value instanceof Uint8Array ? value : uint8ArrayConcat(value.bufs)
       );
-      console.log(decodedData);
+
       return JSON.parse(decodedData);
     } catch (error) {
       console.error("Error reading stream response:", error);
       return null;
     }
   }
+
+  _chunkString(str, size = 1024) {
+    if (typeof str !== "string") {
+      str = str.toString();
+    }
+    const chunks = [];
+    for (let i = 0; i < str.length; i += size) {
+      chunks.push(str.slice(i, i + size));
+    }
+    return chunks;
+  }
+  // async _readStreamResponse(stream) {
+  //   try {
+  //     const message = await stream.source.next();
+  //     if (!message || !message.value) return null;
+
+  //     const value = message.value;
+  //     const decodedData = uint8ArrayToString(
+  //       value instanceof Uint8Array ? value : uint8ArrayConcat(value.bufs)
+  //     );
+  //     console.log(decodedData);
+  //     return JSON.parse(decodedData);
+  //   } catch (error) {
+  //     console.error("Error reading stream response:", error);
+  //     return null;
+  //   }
+  // }
   _chunkString(str, size = this.chunkSize) {
     if (typeof str !== "string") {
       str = str.toString();
