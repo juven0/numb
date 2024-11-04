@@ -66,12 +66,12 @@ class FilecoinNode {
     this.BlockStorage.init();
 
     this.DHT = new DHT(this.node, this.BlockStorage);
-    // this.BlockChain = new BlockChain(
-    //   this.storePath + "/blockchain-db",
-    //   this.DHT,
-    //   this.node
-    // );
-    // this.BlockChain.initialize();
+    this.BlockChain = new BlockChain(
+      this.storePath + "/blockchain-db",
+      this.DHT,
+      this.node
+    );
+    this.BlockChain.initialize();
     this.DHT.start();
     //user manager
     // this.DistributedUserIdentity = new DistributedUserIdentity(
@@ -178,12 +178,11 @@ class FilecoinNode {
     const hash = crypto.createHash("sha256").update(fileContent).digest("hex");
     const fileMetaData = new FileMetadata(name, stats.size, hash);
 
-    // const previousHash = this.BlockChain.getLasteBlock().hash;
-    // const index = this.BlockChain.getLasteBlock().index;
+    const previousblock = await this.BlockChain.getLasteBlock();
 
     const newBlock = new BlockIteme(
-      1,
-      "gjjhghggkj",
+      previousblock["index"] + 1,
+      previousblock["hash"],
       fileMetaData,
       Date.now(),
       [],
@@ -207,15 +206,11 @@ class FilecoinNode {
     }
     newBlock.cids = Cids;
     //test retrive file
-    await this.retrieveFile(newBlock.fileMetadata, newBlock.cids);
-
-    // this.BlockChain.addBlock(newBlock);
-    // console.log(this.BlockChain);
+    // await this.retrieveFile(newBlock.fileMetadata, newBlock.cids);
+    // console.log(newBlock.hash);
+    this.BlockChain.addBlock(newBlock);
 
     return blocks;
-  }
-  async ensureDHTStarted() {
-    const peerIds = await this.node.peerStore.all();
   }
   async storeBlock(block) {
     console.log("storeBlock called with CID:", block.cid.toString());
@@ -227,11 +222,12 @@ class FilecoinNode {
     return;
   }
 
-  async retrieveAndSaveFile(fileHash = "fg", outputPath = null) {
+  async retrieveAndSaveFile(fileHash, outputPath = null) {
     try {
       console.log("Retrieving file with hash:", fileHash);
+      const fileBlock = await this.BlockChain.getBlock(fileHash);
 
-      const fileData = await this.retrieveFileByHash(fileHash);
+      const fileData = await this.retrieveFileByHash(fileBlock);
       if (!fileData) {
         console.log("File not found or corrupted");
         return null;
@@ -326,12 +322,10 @@ class FilecoinNode {
   //   }
   // }
 
-  async retrieveFileByHash(fileHash) {
+  async retrieveFileByHash(fileBlock) {
     try {
-      const blockCids = [
-        "bafyreieo5woddecktotuqit3xe7zymzxb75hicufonq7smk466vx4woexu",
-        "bafyreichojz7lvy3oplonaeubvk5wbo7se3p35mweswxx22r7yefdtc5xa",
-      ];
+      console.log(fileBlock);
+      const blockCids = fileBlock.cids.map((cid) => cid["/"]);
       const fileChunks = [];
       for (const cid of blockCids) {
         const blockData = await this.DHT.get(cid);
@@ -363,7 +357,7 @@ class FilecoinNode {
 
       return {
         data: fileBuffer,
-        name: "myout.jpg",
+        name: fileBlock.fileMetadata.name,
       };
     } catch (error) {
       console.error("Error retrieving file by hash:", error);

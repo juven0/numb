@@ -83,7 +83,9 @@ class BlockStorage {
         throw new Error("Database not initialized");
       }
 
-      return await this.db.get("LAST_BLOCK_HASH");
+      const lastHash = await this.db.get("LAST_BLOCK_HASH");
+      console.log("last hash is  => " + lastHash);
+      return lastHash;
     } catch (error) {
       if (error.notFound) {
         return null;

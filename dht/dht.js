@@ -229,7 +229,8 @@ class DHT {
     const closestPeers = await this._findClosestPeers(normalizedKey);
 
     // Stocker localement aussi
-    await this.storage.storeBlock(normalizedKey, stringData);
+
+    await this.storage.storeBlock(keyHash, stringData);
 
     for (const peer of closestPeers) {
       try {
@@ -260,12 +261,11 @@ class DHT {
     const normalizedKey = this._normalizeKey(key);
 
     try {
-      // Vérifier d'abord localement
-      // const localData = await this.storage.getBlock(normalizedKey);
-      // if (localData) {
-      //   console.log("Data found locally");
-      //   return localData.toString();
-      // }
+      const localData = await this.storage.getBlock(normalizedKey);
+      if (localData) {
+        console.log("Data found locally");
+        return localData.toString();
+      }
 
       console.log("Data not found locally, trying peers");
       const closestPeers = await this._findClosestPeers(normalizedKey);

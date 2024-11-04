@@ -26,7 +26,7 @@ await filecoinNode.init();
 app.use(express.static("public"));
 
 app.post("/upload", async (req, res) => {
-  const filePath = "./backiee-279860-landscape.jpg";
+  const filePath = "./original-f9a8e6a46c0bf919b14ade317b8c2af0.mp4";
   const name = path.basename(filePath);
   try {
     const blocks = await filecoinNode.splitAndStoreFile(filePath, name);
@@ -46,7 +46,10 @@ app.post("/upload", async (req, res) => {
 });
 
 app.get("/get", async (req, res) => {
-  const result = await filecoinNode.retrieveAndSaveFile("dsfds", "./out/");
+  const result = await filecoinNode.retrieveAndSaveFile(
+    "1d5ef02fc175301b8b4675112df2902e25c32842e72fbc9ab43bd5b79a099b40",
+    "./out/"
+  );
 
   res.status(200).send({
     message: result,
