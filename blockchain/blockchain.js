@@ -152,5 +152,63 @@ class BlockChain {
       return false;
     }
   }
+
+  async getUserFiles(userId) {
+    try {
+      console.log("Getting files for user:", userId);
+      const blocks = await this.storage.getAllBlocks();
+
+      const userBlocks = blocks.filter((block) => block.userId === userId);
+
+      return userBlocks.map((block) => ({
+        fileName: block.fileMetadata.name,
+        fileHash: block.fileMetadata.hash,
+        uploadTimestamp: block.timestamp,
+        blockHash: block.hash,
+      }));
+    } catch (error) {
+      console.error("Error getting user files:", error);
+      throw error;
+    }
+  }
+
+  async getUserFile(userId, fileHash) {
+    try {
+      const blocks = await this.storage.getAllBlocks();
+      const block = blocks.find(
+        (block) =>
+          block.userId === userId && block.fileMetadata?.hash === fileHash
+      );
+
+      if (!block) return null;
+
+      return {
+        file: {
+          name: block.fileMetadata.name,
+          hash: block.fileMetadata.hash,
+        },
+        storage: {
+          blockHash: block.hash,
+          timestamp: block.timestamp,
+        },
+      };
+    } catch (error) {
+      console.error("Error getting user file:", error);
+      throw error;
+    }
+  }
+  async verifyFileOwnership(userId, fileHash) {
+    try {
+      const blocks = await this.storage.getAllBlocks();
+      return blocks.some(
+        (block) =>
+          block.userId === userId && block.fileMetadata?.hash === fileHash
+      );
+    } catch (error) {
+      console.error("Error verifying file ownership:", error);
+      throw error;
+    }
+  }
+  s;
 }
 export { BlockChain };

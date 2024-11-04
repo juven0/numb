@@ -6,6 +6,7 @@ import process from "process";
 import { error } from "console";
 import bodyParser from "body-parser";
 import cors from "cors";
+import { hash } from "crypto";
 
 const app = express();
 const port = 3000;
@@ -65,6 +66,30 @@ app.post("/user/create", async (req, res) => {
     });
   } catch (error) {
     res.status(500).send(`error to create ${userName}`);
+  }
+});
+
+app.get("/user/files/:id", async (req, res) => {
+  const userId = req.params.id;
+  try {
+    const files = await filecoinNode.getUserFiles(userId);
+    res.status(200).send({
+      files: files,
+    });
+  } catch (error) {
+    res.status(500).send(`error to get your files `);
+  }
+});
+
+app.get("/user/file/:hash", async (req, res) => {
+  const hash = req.params.hash;
+  try {
+    const file = await filecoinNode.retrieveUserFile(hash);
+    res.status(200).send({
+      files: file,
+    });
+  } catch (error) {
+    res.status(500).send(`error to get  ${hash}`);
   }
 });
 

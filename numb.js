@@ -74,12 +74,12 @@ class FilecoinNode {
     this.BlockChain.initialize();
     this.DHT.start();
     //user manager
-    // this.DistributedUserIdentity = new DistributedUserIdentity(
-    //   this.node,
-    //   this.DHT,
-    //   this.storePath
-    // );
-    // this.DistributedUserIdentity.start();
+    this.DistributedUserIdentity = new DistributedUserIdentity(
+      this.node,
+      this.DHT,
+      this.storePath
+    );
+    this.DistributedUserIdentity.start();
 
     this.wallet = {
       address: crypto.randomBytes(20).toString("hex"),
@@ -250,78 +250,6 @@ class FilecoinNode {
     }
   }
 
-  // async retrieveFileByHash(fileHash) {
-  //   try {
-  //     // console.log("Retrieving file with hash:", fileHash);
-
-  //     // // 1. D'abord récupérer les métadonnées du fichier depuis la blockchain
-  //     // const fileMetadata = await this._findFileMetadataByHash(fileHash);
-  //     // if (!fileMetadata) {
-  //     //   console.log("File metadata not found for hash:", fileHash);
-  //     //   return null;
-  //     // }
-
-  //     // console.log("Found file metadata:", {
-  //     //   name: fileMetadata.name,
-  //     //   size: fileMetadata.size,
-  //     //   hash: fileMetadata.hash
-  //     // });
-
-  //     // 2. Récupérer les CIDs des blocs associés
-  //     // const blockCids = await this._getBlockCidsForFile(fileHash);
-  //     // if (!blockCids || blockCids.length === 0) {
-  //     //   console.log("No blocks found for file");
-  //     //   return null;
-  //     // }
-
-  //     // console.log(`Found ${blockCids.length} blocks for file`);
-
-  //     // 3. Récupérer tous les blocs
-  //     const blockCids = [
-  //       "bafyreichojz7lvy3oplonaeubvk5wbo7se3p35mweswxx22r7yefdtc5xa",
-  //       "bafyreieo5woddecktotuqit3xe7zymzxb75hicufonq7smk466vx4woexu",
-  //     ];
-  //     const blocks = [];
-  //     for (const cid of blockCids) {
-  //       const blockData = await this.DHT.get(cid);
-  //       if (!blockData) {
-  //         console.error(`Failed to retrieve block with CID: ${cid}`);
-  //         return null;
-  //       }
-  //       blocks.push(blockData);
-  //     }
-
-  //     // 4. Reconstituer le fichier
-  //     const fileData = Buffer.concat(blocks.map((b) => Buffer.from(b)));
-  //     // return fileData;
-  //     // 5. Vérifier l'intégrité
-  //     // const reconstructedHash = crypto
-  //     //   .createHash("sha256")
-  //     //   .update(fileData)
-  //     //   .digest("hex");
-
-  //     // if (reconstructedHash !== fileHash) {
-  //     //   console.error("File integrity check failed");
-  //     //   return null;
-  //     // }
-
-  //     // console.log("File retrieved successfully");
-  //     // return {
-  //     //   name: fileMetadata.name,
-  //     //   data: fileData,
-  //     //   size: fileData.length,
-  //     //   hash: fileHash
-  //     // };
-  //     return {
-  //       name: "test_out.jpg",
-  //       data: fileData,
-  //     };
-  //   } catch (error) {
-  //     console.error("Error retrieving file by hash:", error);
-  //     throw error;
-  //   }
-  // }
-
   async retrieveFileByHash(fileBlock) {
     try {
       console.log(fileBlock);
@@ -395,6 +323,29 @@ class FilecoinNode {
 
   async UserLogin(userId, privateKey) {
     return await this.DistributedUserIdentity.login(userId, privateKey);
+  }
+
+  async getUserFiles(userId) {
+    return await this.BlockChain.getUserFiles(userId);
+  }
+
+  // Récupérer un fichier en vérifiant la propriété
+  async retrieveUserFile(userId, fileHash) {
+    try {
+      // Vérifier la propriété
+      const isOwner = await this.BlockChain.verifyFileOwnership(
+        userId,
+        fileHash
+      );
+      if (!isOwner) {
+        throw new Error("Access denied: User does not own this file");
+      }
+
+      return await this.retrieveFile(fileHash);
+    } catch (error) {
+      console.error("Error retrieving user file:", error);
+      throw error;
+    }
   }
 }
 

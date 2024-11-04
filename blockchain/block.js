@@ -7,7 +7,8 @@ class BlockIteme {
     fileMetadata,
     timestamp,
     transactions,
-    cids
+    cids,
+    userId
   ) {
     this.index = index;
     this.fileMetadata = fileMetadata;
@@ -16,6 +17,7 @@ class BlockIteme {
     this.transactions = transactions;
     this.cids = cids;
     this.hash = this.calculateHash();
+    this.userId = userId;
   }
 
   calculateHash() {
@@ -25,8 +27,10 @@ class BlockIteme {
         this.index +
           this.previousHash +
           this.timestamp +
+          JSON.stringify(this.fileMetadata) +
           JSON.stringify(this.transactions) +
-          JSON.stringify(this.cids)
+          JSON.stringify(this.cids) +
+          this.userId
       )
       .digest("hex");
   }
