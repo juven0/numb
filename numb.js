@@ -172,7 +172,7 @@ class FilecoinNode {
       console.error("Failed to send welcome message:", err);
     }
   }
-  async splitAndStoreFile(filePath, name) {
+  async splitAndStoreFile(filePath, name, userId) {
     const fileContent = await fs.readFile(filePath);
     const stats = await fs.stat(filePath);
     const hash = crypto.createHash("sha256").update(fileContent).digest("hex");
@@ -186,7 +186,8 @@ class FilecoinNode {
       fileMetaData,
       Date.now(),
       [],
-      []
+      [],
+      userId
     );
 
     const blocks = [];

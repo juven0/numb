@@ -19,21 +19,31 @@ const corsOptions = {
 app.use(bodyParser.json());
 app.use(cors(corsOptions));
 
-const upload = multer({ dest: "uploads/" });
+// const upload = multer({ dest: "uploads/" });
 
 const filecoinNode = new FilecoinNode(4002, "./test");
 await filecoinNode.init();
 
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/");
+  },
+  filename: (req, file, cb) => {
+    cb(null, file.originalname);
+  },
+});
+
+const upload = multer({ storage });
 app.use(express.static("public"));
 
-app.post("/upload", async (req, res) => {
-  const filePath = "./original-f9a8e6a46c0bf919b14ade317b8c2af0.mp4";
+app.post("/upload", upload.single("file"), async (req, res) => {
+  const filePath = "./uploads/" + req.file.originalname;
   const name = path.basename(filePath);
   try {
-    const blocks = await filecoinNode.splitAndStoreFile(filePath, name);
-    console.log(
-      "Fichier découpé et stocké en blocs :",
-      blocks.map((block) => block.cid.toString())
+    const blocks = await filecoinNode.splitAndStoreFile(
+      filePath,
+      name,
+      req.body.userId
     );
 
     res.status(200).send({
