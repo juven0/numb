@@ -21,6 +21,7 @@ import { FileMetadata } from "./blockchain/fileMetadata.js";
 import { BlockIteme } from "./blockchain/block.js";
 import { DistributedUserIdentity } from "./user/DistributedUserIdentity.js";
 import { BlockStorage } from "./file/Filestorage.js";
+import { FileEncryption } from "./file/filesEncription.js";
 
 class FilecoinNode {
   constructor(listenPort, storePath = "./") {
@@ -31,6 +32,7 @@ class FilecoinNode {
     this.BLOCK_SIZE = 1024 * 1024;
     this.listenPort = listenPort;
     this.storePath = storePath;
+    this.fileEncryption = new FileEncryption();
   }
 
   async init() {
@@ -172,12 +174,38 @@ class FilecoinNode {
       console.error("Failed to send welcome message:", err);
     }
   }
-  async splitAndStoreFile(filePath, name, userId) {
+  convertBufferFormat(bufferJson) {
+    if (
+      bufferJson &&
+      bufferJson.type === "Buffer" &&
+      Array.isArray(bufferJson.data)
+    ) {
+      return Buffer.from(bufferJson.data);
+    }
+    return bufferJson;
+  }
+  async splitAndStoreFile(filePath, name, userId, privateKey, pubkey) {
     const fileContent = await fs.readFile(filePath);
+    const encryptedFile = await this.fileEncryption.encryptFile(
+      fileContent,
+      pubkey,
+      privateKey
+    );
+
     const stats = await fs.stat(filePath);
     const hash = crypto.createHash("sha256").update(fileContent).digest("hex");
     const fileMetaData = new FileMetadata(name, stats.size, hash);
 
+    const encryptionMeta = {
+      iv: this.convertBufferFormat(encryptedFile.iv),
+      authTag: this.convertBufferFormat(encryptedFile.authTag),
+      protectedKey: {
+        key: this.convertBufferFormat(encryptedFile.protectedKey.key),
+        authTag: this.convertBufferFormat(encryptedFile.protectedKey.authTag),
+      },
+      signature: this.convertBufferFormat(encryptedFile.signature),
+      salt: this.convertBufferFormat(encryptedFile.salt),
+    };
     const previousblock = await this.BlockChain.getLasteBlock();
 
     const newBlock = new BlockIteme(
@@ -187,7 +215,8 @@ class FilecoinNode {
       Date.now(),
       [],
       [],
-      userId
+      userId,
+      encryptionMeta
     );
 
     const blocks = [];
@@ -223,12 +252,21 @@ class FilecoinNode {
     return;
   }
 
-  async retrieveAndSaveFile(fileHash, outputPath = null) {
+  async retrieveAndSaveFile(
+    fileHash,
+    outputPath = null,
+    publicKey,
+    privateKey
+  ) {
     try {
       console.log("Retrieving file with hash:", fileHash);
       const fileBlock = await this.BlockChain.getBlock(fileHash);
 
-      const fileData = await this.retrieveFileByHash(fileBlock);
+      const fileData = await this.retrieveFileByHash(
+        fileBlock,
+        publicKey,
+        privateKey
+      );
       if (!fileData) {
         console.log("File not found or corrupted");
         return null;
@@ -251,7 +289,7 @@ class FilecoinNode {
     }
   }
 
-  async retrieveFileByHash(fileBlock) {
+  async retrieveFileByHash(fileBlock, publicKey, privateKey) {
     try {
       console.log(fileBlock);
       const blockCids = fileBlock.cids.map((cid) => cid["/"]);
@@ -283,6 +321,36 @@ class FilecoinNode {
           return Buffer.from(chunk);
         })
       );
+
+      // const encryptionMeta = {
+      //   iv: Buffer.from(fileBlock.encryptionMeta.iv.data),
+      //   authTag: Buffer.from(fileBlock.encryptionMeta.authTag.data),
+      //   protectedKey: {
+      //     key: Buffer.from(fileBlock.encryptionMeta.protectedKey.key.data),
+      //     authTag: Buffer.from(
+      //       fileBlock.encryptionMeta.protectedKey.authTag.data
+      //     ),fileBuffer
+      //     iv: fileBlock.encryptionMeta.protectedKey.iv,
+      //   },
+      //   signature: Buffer.from(fileBlock.encryptionMeta.signature.data),
+      //   salt: Buffer.from(fileBlock.encryptionMeta.salt.data),
+      // };
+
+      // const decryptedData = await this.fileEncryption.decryptFile(
+      //   fileBuffer,
+      //   encryptionMeta.iv,
+      //   encryptionMeta.authTag,
+      //   encryptionMeta.protectedKey,
+      //   encryptionMeta.signature,
+      //   encryptionMeta.salt,
+      //   publicKey,
+      //   privateKey
+      // );
+
+      // return {
+      //   data: decryptedData,
+      //   fileName: fileBlock.fileMetadata.name,
+      // };
 
       return {
         data: fileBuffer,

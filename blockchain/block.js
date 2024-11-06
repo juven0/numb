@@ -8,16 +8,19 @@ class BlockIteme {
     timestamp,
     transactions,
     cids,
-    userId
+    userId,
+    encryptionMeta
   ) {
     this.index = index;
-    this.fileMetadata = fileMetadata;
     this.previousHash = previousHash;
+    this.fileMetadata = fileMetadata;
     this.timestamp = timestamp;
     this.transactions = transactions;
     this.cids = cids;
-    this.hash = this.calculateHash();
     this.userId = userId;
+    this.encryptionMeta = encryptionMeta;
+    this.sharing = new FileSharing();
+    this.hash = this.calculateHash();
   }
 
   calculateHash() {

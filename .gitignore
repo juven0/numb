@@ -5,6 +5,7 @@
 /blockstore/*
 /a/*
 /test/*
+/uploads/*
 # Logs
 logs
 *.log

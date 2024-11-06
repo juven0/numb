@@ -43,7 +43,9 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     const blocks = await filecoinNode.splitAndStoreFile(
       filePath,
       name,
-      req.body.userId
+      req.body.userId,
+      req.body.privatekey,
+      req.body.pubkey
     );
 
     res.status(200).send({
@@ -56,10 +58,12 @@ app.post("/upload", upload.single("file"), async (req, res) => {
   }
 });
 
-app.get("/get", async (req, res) => {
+app.post("/get", async (req, res) => {
   const result = await filecoinNode.retrieveAndSaveFile(
-    "1d5ef02fc175301b8b4675112df2902e25c32842e72fbc9ab43bd5b79a099b40",
-    "./out/"
+    "5be5e484ed1547664e93de3a892ece9397aa9e7133a303e4b77dabe16f777f79",
+    "./out/",
+    req.body.publicKey,
+    req.body.privateKey
   );
 
   res.status(200).send({
