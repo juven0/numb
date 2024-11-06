@@ -1,6 +1,5 @@
 import crypto from "crypto";
-import FileSharing from "../file/ShareFile";
-// import { FileSharing } from "../file/ShareFile";
+import { FileSharing } from "../file/ShareFile.js";
 
 class BlockIteme {
   constructor(
@@ -33,7 +32,6 @@ class BlockIteme {
           this.previousHash +
           this.timestamp +
           JSON.stringify(this.fileMetadata) +
-          JSON.stringify(this.transactions) +
           JSON.stringify(this.cids) +
           this.userId
       )

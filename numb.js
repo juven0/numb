@@ -186,26 +186,26 @@ class FilecoinNode {
   }
   async splitAndStoreFile(filePath, name, userId, privateKey, pubkey) {
     const fileContent = await fs.readFile(filePath);
-    const encryptedFile = await this.fileEncryption.encryptFile(
-      fileContent,
-      pubkey,
-      privateKey
-    );
+    // const encryptedFile = await this.fileEncryption.encryptFile(
+    //   fileContent,
+    //   pubkey,
+    //   privateKey
+    // );
 
     const stats = await fs.stat(filePath);
     const hash = crypto.createHash("sha256").update(fileContent).digest("hex");
     const fileMetaData = new FileMetadata(name, stats.size, hash);
-
-    const encryptionMeta = {
-      iv: this.convertBufferFormat(encryptedFile.iv),
-      authTag: this.convertBufferFormat(encryptedFile.authTag),
-      protectedKey: {
-        key: this.convertBufferFormat(encryptedFile.protectedKey.key),
-        authTag: this.convertBufferFormat(encryptedFile.protectedKey.authTag),
-      },
-      signature: this.convertBufferFormat(encryptedFile.signature),
-      salt: this.convertBufferFormat(encryptedFile.salt),
-    };
+    const encryptionMeta = {}
+    // const encryptionMeta = {
+    //   iv: this.convertBufferFormat(encryptedFile.iv),
+    //   authTag: this.convertBufferFormat(encryptedFile.authTag),
+    //   protectedKey: {
+    //     key: this.convertBufferFormat(encryptedFile.protectedKey.key),
+    //     authTag: this.convertBufferFormat(encryptedFile.protectedKey.authTag),
+    //   },
+    //   signature: this.convertBufferFormat(encryptedFile.signature),
+    //   salt: this.convertBufferFormat(encryptedFile.salt),
+    // };
     const previousblock = await this.BlockChain.getLasteBlock();
 
     const newBlock = new BlockIteme(
