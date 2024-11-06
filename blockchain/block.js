@@ -1,4 +1,6 @@
 import crypto from "crypto";
+import FileSharing from "../file/ShareFile";
+// import { FileSharing } from "../file/ShareFile";
 
 class BlockIteme {
   constructor(
@@ -36,6 +38,20 @@ class BlockIteme {
           this.userId
       )
       .digest("hex");
+  }
+
+  shareWith(targetUserId) {
+    this.sharing.addSharedUser(targetUserId);
+    this.transactions.push({
+      type: "share",
+      targetUserId,
+      timestamp: Date.now(),
+    });
+    this.hash = this.calculateHash();
+  }
+
+  isSharedWith(userId) {
+    return this.userId === userId || this.sharing.sharedWith.has(userId);
   }
 }
 

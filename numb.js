@@ -239,6 +239,11 @@ class FilecoinNode {
     // await this.retrieveFile(newBlock.fileMetadata, newBlock.cids);
     // console.log(newBlock.hash);
     this.BlockChain.addBlock(newBlock);
+    // shareFile(
+    //   "5be5e484ed1547664e93de3a892ece9397aa9e7133a303e4b77dabe16f777f79",
+    //   userId,
+    //   "e243141514545bfqwet"
+    // );
 
     return blocks;
   }
@@ -413,6 +418,69 @@ class FilecoinNode {
       return await this.retrieveFile(fileHash);
     } catch (error) {
       console.error("Error retrieving user file:", error);
+      throw error;
+    }
+  }
+
+  async shareFile(fileHash, ownerUserId, targetUserId) {
+    try {
+      const fileBlock = await this.BlockChain.getBlock(fileHash);
+      if (!fileBlock) {
+        throw new Error("File not found");
+      }
+
+      // Vérifier que l'utilisateur est le propriétaire
+      if (fileBlock.userId !== ownerUserId) {
+        throw new Error("Only the owner can share the file");
+      }
+
+      fileBlock.shareWith(targetUserId);
+      await this.BlockChain.updateBlock(fileBlock);
+
+      return {
+        success: true,
+        message: `File shared with user ${targetUserId}`,
+      };
+    } catch (error) {
+      console.error("Error sharing file:", error);
+      throw error;
+    }
+  }
+
+  async getSharedFiles(userId) {
+    try {
+      const allBlocks = await this.BlockChain.getAllBlocks();
+      return allBlocks.filter(
+        (block) => block.isSharedWith(userId) && block.userId !== userId
+      );
+    } catch (error) {
+      console.error("Error getting shared files:", error);
+      throw error;
+    }
+  }
+
+  async getSharedUsers(fileHash) {
+    try {
+      const fileBlock = await this.BlockChain.getBlock(fileHash);
+      if (!fileBlock) {
+        throw new Error("File not found");
+      }
+      return fileBlock.sharing.getSharedUsers();
+    } catch (error) {
+      console.error("Error getting shared users:", error);
+      throw error;
+    }
+  }
+
+  // Optionnel : Obtenir tous les fichiers (personnels et partagés) d'un utilisateur
+  async getAllAccessibleFiles(userId) {
+    try {
+      const allBlocks = await this.BlockChain.getAllBlocks();
+      return allBlocks.filter(
+        (block) => block.userId === userId || block.isSharedWith(userId)
+      );
+    } catch (error) {
+      console.error("Error getting accessible files:", error);
       throw error;
     }
   }
