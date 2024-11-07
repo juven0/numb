@@ -62,9 +62,9 @@ app.post("/get/:hash", async (req, res) => {
   try {
     const result = await filecoinNode.retrieveAndSaveFile(
       req.params.hash,
-      "./out/"
-      // req.body.publicKey,
-      // req.body.privateKey
+      "./out/",
+      req.body.publicKey,
+      req.body.privateKey
     );
 
     if (!fs.existsSync(result)) {
