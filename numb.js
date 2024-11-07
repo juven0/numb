@@ -22,6 +22,7 @@ import { BlockIteme } from "./blockchain/block.js";
 import { DistributedUserIdentity } from "./user/DistributedUserIdentity.js";
 import { BlockStorage } from "./file/Filestorage.js";
 import { FileEncryption } from "./file/filesEncription.js";
+import { ShareSystem } from "./file/shareSystem.js";
 
 class FilecoinNode {
   constructor(listenPort, storePath = "./") {
@@ -82,7 +83,7 @@ class FilecoinNode {
       this.storePath
     );
     this.DistributedUserIdentity.start();
-
+    this.shareSystem = new ShareSystem(this.BlockChain);
     this.wallet = {
       address: crypto.randomBytes(20).toString("hex"),
       balance: 1000, // Initial balance in FIL
@@ -195,7 +196,7 @@ class FilecoinNode {
     const stats = await fs.stat(filePath);
     const hash = crypto.createHash("sha256").update(fileContent).digest("hex");
     const fileMetaData = new FileMetadata(name, stats.size, hash);
-    const encryptionMeta = {}
+    const encryptionMeta = {};
     // const encryptionMeta = {
     //   iv: this.convertBufferFormat(encryptedFile.iv),
     //   authTag: this.convertBufferFormat(encryptedFile.authTag),
@@ -238,12 +239,11 @@ class FilecoinNode {
     //test retrive file
     // await this.retrieveFile(newBlock.fileMetadata, newBlock.cids);
     // console.log(newBlock.hash);
-    this.BlockChain.addBlock(newBlock);
-    // shareFile(
-    //   "5be5e484ed1547664e93de3a892ece9397aa9e7133a303e4b77dabe16f777f79",
-    //   userId,
-    //   "e243141514545bfqwet"
-    // );
+    await this.BlockChain.addBlock(newBlock);
+
+    await this.shareFile(newBlock.hash, userId, "e243141514545bfqwet");
+    const result = await this.getSharedFiles(userId);
+    console.log(result);
 
     return blocks;
   }
@@ -423,66 +423,23 @@ class FilecoinNode {
   }
 
   async shareFile(fileHash, ownerUserId, targetUserId) {
-    try {
-      const fileBlock = await this.BlockChain.getBlock(fileHash);
-      if (!fileBlock) {
-        throw new Error("File not found");
-      }
+    return this.shareSystem.shareFile(fileHash, ownerUserId, targetUserId);
+  }
 
-      // Vérifier que l'utilisateur est le propriétaire
-      if (fileBlock.userId !== ownerUserId) {
-        throw new Error("Only the owner can share the file");
-      }
-
-      fileBlock.shareWith(targetUserId);
-      await this.BlockChain.updateBlock(fileBlock);
-
-      return {
-        success: true,
-        message: `File shared with user ${targetUserId}`,
-      };
-    } catch (error) {
-      console.error("Error sharing file:", error);
-      throw error;
-    }
+  async unshareFile(fileHash, ownerUserId, targetUserId) {
+    return this.shareSystem.unshareFile(fileHash, ownerUserId, targetUserId);
   }
 
   async getSharedFiles(userId) {
-    try {
-      const allBlocks = await this.BlockChain.getAllBlocks();
-      return allBlocks.filter(
-        (block) => block.isSharedWith(userId) && block.userId !== userId
-      );
-    } catch (error) {
-      console.error("Error getting shared files:", error);
-      throw error;
-    }
+    return this.shareSystem.getSharedFiles(userId);
   }
 
-  async getSharedUsers(fileHash) {
-    try {
-      const fileBlock = await this.BlockChain.getBlock(fileHash);
-      if (!fileBlock) {
-        throw new Error("File not found");
-      }
-      return fileBlock.sharing.getSharedUsers();
-    } catch (error) {
-      console.error("Error getting shared users:", error);
-      throw error;
-    }
+  async getFileSharedUsers(fileHash, ownerUserId) {
+    return this.shareSystem.getFileSharedUsers(fileHash, ownerUserId);
   }
 
-  // Optionnel : Obtenir tous les fichiers (personnels et partagés) d'un utilisateur
-  async getAllAccessibleFiles(userId) {
-    try {
-      const allBlocks = await this.BlockChain.getAllBlocks();
-      return allBlocks.filter(
-        (block) => block.userId === userId || block.isSharedWith(userId)
-      );
-    } catch (error) {
-      console.error("Error getting accessible files:", error);
-      throw error;
-    }
+  async canAccessFile(fileHash, userId) {
+    return this.shareSystem.canAccessFile(fileHash, userId);
   }
 }
 

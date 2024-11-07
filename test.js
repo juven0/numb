@@ -87,6 +87,7 @@ app.get("/user/files/:id", async (req, res) => {
   const userId = req.params.id;
   try {
     const files = await filecoinNode.getUserFiles(userId);
+    console.log(files);
     res.status(200).send({
       files: files,
     });

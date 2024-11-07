@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import { FileSharing } from "../file/ShareFile.js";
 
 class BlockIteme {
   constructor(
@@ -10,17 +9,18 @@ class BlockIteme {
     transactions,
     cids,
     userId,
-    encryptionMeta
+    encryptionMeta,
+    sharedWith = []
   ) {
     this.index = index;
     this.previousHash = previousHash;
     this.fileMetadata = fileMetadata;
     this.timestamp = timestamp;
-    this.transactions = transactions;
+    this.transactions = transactions || [];
     this.cids = cids;
     this.userId = userId;
     this.encryptionMeta = encryptionMeta;
-    this.sharing = new FileSharing();
+    this.sharedWith = sharedWith;
     this.hash = this.calculateHash();
   }
 
@@ -39,17 +39,32 @@ class BlockIteme {
   }
 
   shareWith(targetUserId) {
-    this.sharing.addSharedUser(targetUserId);
-    this.transactions.push({
-      type: "share",
-      targetUserId,
-      timestamp: Date.now(),
-    });
-    this.hash = this.calculateHash();
+    if (!this.sharedWith.includes(targetUserId)) {
+      this.sharedWith.push(targetUserId);
+      this.transactions.push({
+        type: "share",
+        targetUserId,
+        timestamp: Date.now(),
+      });
+      this.hash = this.calculateHash();
+    }
+  }
+
+  unshareWith(targetUserId) {
+    const index = this.sharedWith.indexOf(targetUserId);
+    if (index !== -1) {
+      this.sharedWith.splice(index, 1);
+      this.transactions.push({
+        type: "unshare",
+        targetUserId,
+        timestamp: Date.now(),
+      });
+      this.hash = this.calculateHash();
+    }
   }
 
   isSharedWith(userId) {
-    return this.userId === userId || this.sharing.sharedWith.has(userId);
+    return this.userId === userId || this.sharedWith.includes(userId);
   }
 }
 

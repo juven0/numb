@@ -165,6 +165,8 @@ class BlockChain {
         fileHash: block.fileMetadata.hash,
         uploadTimestamp: block.timestamp,
         blockHash: block.hash,
+        share: block.sharing,
+        transaction: block.transactions,
       }));
     } catch (error) {
       console.error("Error getting user files:", error);
@@ -209,6 +211,38 @@ class BlockChain {
       throw error;
     }
   }
-  s;
+  async updateBlock(updatedBlock) {
+    try {
+      console.log("erltwejrlgjleskjglwerjoiwheroiw==>" + updatedBlock.hash);
+      // Vérifier si le bloc existe
+      const existingBlock = await this.storage.getBlock(
+        "28b0cb1934b23ab8d8107a6e9d60afdeaa7bfa00bf3d54dc1cdd5d75ac37ec77"
+      );
+      console.log(existingBlock);
+      if (!existingBlock) {
+        throw new Error("Block not found in chain");
+      }
+
+      // Sauvegarder le bloc mis à jour
+      await this.storage.saveBlock(updatedBlock);
+
+      // Mise à jour des métadonnées si nécessaire
+      if (updatedBlock.fileMetadata) {
+        this.addFileMetadata(updatedBlock.fileMetadata);
+      }
+
+      // Annoncer la mise à jour aux pairs via DHT
+      if (this.dht) {
+        await this.dht.put(updatedBlock.hash, JSON.stringify(updatedBlock));
+      }
+
+      // Déclencher la synchronisation si nécessaire
+
+      return true;
+    } catch (error) {
+      console.error("Error updating block:", error);
+      throw error;
+    }
+  }
 }
 export { BlockChain };
