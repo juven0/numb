@@ -211,32 +211,20 @@ class BlockChain {
       throw error;
     }
   }
-  async updateBlock(updatedBlock) {
+  async updateBlock(hash, updatedBlock) {
     try {
-      console.log("erltwejrlgjleskjglwerjoiwheroiw==>" + updatedBlock.hash);
-      // Vérifier si le bloc existe
-      const existingBlock = await this.storage.getBlock(
-        "28b0cb1934b23ab8d8107a6e9d60afdeaa7bfa00bf3d54dc1cdd5d75ac37ec77"
-      );
-      console.log(existingBlock);
+      // Vérifier que le bloc existe
+      const existingBlock = await this.getBlock(hash);
       if (!existingBlock) {
-        throw new Error("Block not found in chain");
+        throw new Error("Block not found");
       }
 
-      // Sauvegarder le bloc mis à jour
-      await this.storage.saveBlock(updatedBlock);
+      // Conserver le hash original
+      updatedBlock.hash = hash;
 
-      // Mise à jour des métadonnées si nécessaire
-      if (updatedBlock.fileMetadata) {
-        this.addFileMetadata(updatedBlock.fileMetadata);
-      }
-
-      // Annoncer la mise à jour aux pairs via DHT
-      if (this.dht) {
-        await this.dht.put(updatedBlock.hash, JSON.stringify(updatedBlock));
-      }
-
-      // Déclencher la synchronisation si nécessaire
+      // Sauvegarder les modifications
+      console.log(hash, JSON.stringify(updatedBlock));
+      await this.storage.db.put(hash, JSON.stringify(updatedBlock));
 
       return true;
     } catch (error) {

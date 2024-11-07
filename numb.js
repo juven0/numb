@@ -241,9 +241,9 @@ class FilecoinNode {
     // console.log(newBlock.hash);
     await this.BlockChain.addBlock(newBlock);
 
-    await this.shareFile(newBlock.hash, userId, "e243141514545bfqwet");
-    const result = await this.getSharedFiles(userId);
-    console.log(result);
+    // await this.shareFile(newBlock.hash, userId, "e243141514545bfqwet");
+    // const result = await this.getSharedFiles(userId);
+    // console.log(result);
 
     return blocks;
   }

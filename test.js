@@ -58,17 +58,27 @@ app.post("/upload", upload.single("file"), async (req, res) => {
   }
 });
 
-app.post("/get", async (req, res) => {
-  const result = await filecoinNode.retrieveAndSaveFile(
-    "5be5e484ed1547664e93de3a892ece9397aa9e7133a303e4b77dabe16f777f79",
-    "./out/",
-    req.body.publicKey,
-    req.body.privateKey
-  );
+app.post("/get/:hash", async (req, res) => {
+  try {
+    const result = await filecoinNode.retrieveAndSaveFile(
+      req.params.hash,
+      "./out/"
+      // req.body.publicKey,
+      // req.body.privateKey
+    );
 
-  res.status(200).send({
-    message: result,
-  });
+    if (!fs.existsSync(result)) {
+      return res.status(404).json({ message: "Fichier non trouvé" });
+    }
+
+    // Configurer les en-têtes pour le téléchargement
+    res.setHeader("Content-Disposition", `attachment; filename=${result}`);
+    res.setHeader("Content-Type", "application/octet-stream");
+
+    // Envoyer le fichier
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+  } catch {}
 });
 
 app.post("/user/create", async (req, res) => {

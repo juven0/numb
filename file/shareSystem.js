@@ -1,72 +1,65 @@
 import { BlockIteme } from "../blockchain/block.js";
 
 class ShareSystem {
-  constructor(storage) {
-    this.storage = storage;
+  constructor(blockchain) {
+    this.blockchain = blockchain;
   }
 
   async shareFile(fileHash, ownerUserId, targetUserId) {
     try {
-      const fileBlock = await this.storage.getBlock(fileHash);
-      console.log(fileBlock);
-      if (!fileBlock) {
+      // Récupérer le bloc existant
+      let block = await this.blockchain.getBlock(fileHash);
+      if (!block) {
         throw new Error("File not found");
       }
 
-      let blockData = fileBlock;
-      if (typeof fileBlock === "string") {
-        blockData = JSON.parse(fileBlock);
+      // Parser si c'est une chaîne
+      if (typeof block === "string") {
+        block = JSON.parse(block);
       }
 
-      // Vérifier que l'utilisateur est le propriétaire
-      if (blockData.userId !== ownerUserId) {
+      // Vérifier la propriété
+      if (block.userId !== ownerUserId) {
         throw new Error("Only the owner can share the file");
       }
 
-      // Créer une nouvelle instance de BlockIteme
-      const block = new BlockIteme(
-        blockData.index,
-        blockData.previousHash,
-        blockData.fileMetadata,
-        blockData.timestamp,
-        blockData.transactions || [],
-        blockData.cids,
-        blockData.userId,
-        blockData.encryptionMeta,
-        blockData.sharedWith || []
-      );
-
+      // Initialiser sharedWith si nécessaire
       if (!block.sharedWith) {
         block.sharedWith = [];
       }
 
-      // Vérifier si le fichier est déjà partagé
+      // Vérifier si déjà partagé
       if (block.sharedWith.includes(targetUserId)) {
         throw new Error("File is already shared with this user");
       }
 
-      // Partager le fichier
+      // Ajouter le nouvel utilisateur
       block.sharedWith.push(targetUserId);
 
-      // Ajouter la transaction de partage
-      const shareTransaction = {
+      // Ajouter la transaction
+      if (!block.transactions) {
+        block.transactions = [];
+      }
+
+      block.transactions.push({
         type: "share",
         targetUserId,
         timestamp: Date.now(),
-      };
-      block.transactions.push(shareTransaction);
+      });
 
-      // Sauvegarder le bloc mis à jour
+      // Important: Ne pas recalculer le hash, conserver le hash existant
+      const originalHash = block.hash;
 
-      await this.storage.storage.saveBlock(block);
+      // Sauvegarder les modifications sans créer de nouvelle instance
+      await this.blockchain.updateBlock(originalHash, block);
 
       return {
         success: true,
         fileName: block.fileMetadata.name,
         fileHash: block.fileMetadata.hash,
-        blockHash: block.hash,
+        blockHash: originalHash,
         sharedWith: block.sharedWith,
-        transaction: shareTransaction,
+        transaction: block.transactions[block.transactions.length - 1],
       };
     } catch (error) {
       console.error("Error sharing file:", error);
@@ -76,7 +69,8 @@ class ShareSystem {
 
   async getSharedFiles(userId) {
     try {
-      const allBlocks = await this.storage.getAllBlocks();
+      const allBlocks = await this.blockchain.getAllBlocks();
+      console.log(JSON.stringify(allBlocks));
       return allBlocks
         .map((block) => {
           let blockData = block;
