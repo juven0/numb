@@ -55,7 +55,9 @@ class FilecoinNode {
       services: {
         identify: identify(),
       },
-      peerDiscovery: [mdns()],
+      peerDiscovery: [mdns(
+        {broadcast:false}
+      )],
       nat: true,
       connectionManager: {
         minConnections: 0, // Réduire le minimum pour les tests
