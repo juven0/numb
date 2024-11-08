@@ -56,6 +56,12 @@ class FilecoinNode {
       },
       peerDiscovery: [mdns()],
       nat: true,
+      connectionManager: {
+        minConnections: 0, // Réduire le minimum pour les tests
+        maxConnections: 50,
+        pollInterval: 2000,
+        autoDialInterval: 2000,
+      },
       relay: {
         enabled: true,
         hop: {
