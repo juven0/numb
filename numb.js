@@ -97,20 +97,24 @@ class FilecoinNode {
 
     this.node.addEventListener("peer:discovery", async (evt) => {
         const peerId = evt.detail.id;
-        if (peerId.toString() === this.node.peerId.toString()) {
-          console.log("Skipping self connection.");
-          return;
-        }
 
-        console.log("Discovered peer:", peerId.toString());
-        const peerMultiaddr = evt.detail.multiaddrs[0].toString();
+  if (peerId.toString() === this.node.peerId.toString()) {
+    console.log("Ignoring self connection via mdns discovery.");
+    return;
+  }
 
-        try {
-          await this.connectToPeer(peerMultiaddr);
-          await this.sendWelcomeMessage(peerId);
-        } catch (err) {
-          console.error(`Échec de la connexion au pair ${peerId}:`, err);
-        }
+  const peerMultiaddr = evt.detail.multiaddrs[0];
+  if (peerMultiaddr.toString().includes("127.0.0.1")) {
+    console.log("Ignoring local address:", peerMultiaddr.toString());
+    return;
+  }
+
+  try {
+    await this.connectToPeer(peerMultiaddr.toString());
+    await this.sendWelcomeMessage(peerId);
+  } catch (err) {
+    console.error(`Échec de la connexion au pair ${peerId}:`, err);
+  }
     });
 
     this.node.handle("/nebula/welcome/1.0.0", async ({ stream }) => {
