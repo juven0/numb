@@ -62,6 +62,7 @@ class FilecoinNode {
         maxConnections: 50,
         pollInterval: 2000,
         autoDialInterval: 2000,
+        autoDial: false,
       },
       relay: {
         enabled: true,
