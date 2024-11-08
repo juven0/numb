@@ -165,6 +165,8 @@ class BlockChain {
         fileHash: block.fileMetadata.hash,
         uploadTimestamp: block.timestamp,
         blockHash: block.hash,
+        share: block.sharing,
+        transaction: block.transactions,
       }));
     } catch (error) {
       console.error("Error getting user files:", error);
@@ -209,6 +211,26 @@ class BlockChain {
       throw error;
     }
   }
-  s;
+  async updateBlock(hash, updatedBlock) {
+    try {
+      // Vérifier que le bloc existe
+      const existingBlock = await this.getBlock(hash);
+      if (!existingBlock) {
+        throw new Error("Block not found");
+      }
+
+      // Conserver le hash original
+      updatedBlock.hash = hash;
+
+      // Sauvegarder les modifications
+      console.log(hash, JSON.stringify(updatedBlock));
+      await this.storage.db.put(hash, JSON.stringify(updatedBlock));
+
+      return true;
+    } catch (error) {
+      console.error("Error updating block:", error);
+      throw error;
+    }
+  }
 }
 export { BlockChain };
