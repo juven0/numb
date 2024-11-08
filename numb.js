@@ -55,9 +55,13 @@ class FilecoinNode {
       services: {
         identify: identify(),
       },
-      peerDiscovery: [mdns(
-        {broadcast:false}
-      )],
+      peerDiscovery: [ mdns({
+        filter: (peerInfo) => {
+          return !peerInfo.multiaddrs.some(addr =>
+            addr.toString().includes("127.0.0.1") || addr.toString().includes("::1")
+          );
+        }
+      })],
       nat: true,
       connectionManager: {
         minConnections: 0, // Réduire le minimum pour les tests
