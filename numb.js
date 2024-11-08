@@ -110,14 +110,17 @@ class FilecoinNode {
     return;
   }
 
-  const peerMultiaddr = evt.detail.multiaddrs[0];
-  if (peerMultiaddr.toString().includes("127.0.0.1")) {
-    console.log("Ignoring local address:", peerMultiaddr.toString());
+  // Filtrer les adresses pour n'utiliser que celles du réseau local
+  const validMultiaddrs = evt.detail.multiaddrs.filter(addr =>
+    addr.toString().includes("192.168.")  // ajuste si ton réseau local est différent
+  );
+  if (validMultiaddrs.length === 0) {
+    console.log("No valid local addresses for peer:", peerId.toString());
     return;
   }
 
   try {
-    await this.connectToPeer(peerMultiaddr.toString());
+    await this.connectToPeer(validMultiaddrs[0].toString());
     await this.sendWelcomeMessage(peerId);
   } catch (err) {
     console.error(`Échec de la connexion au pair ${peerId}:`, err);
