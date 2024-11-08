@@ -180,10 +180,7 @@ class FilecoinNode {
   }
 
   async connectToPeer(peerMultiaddr) {
-    if (ma.getPeerId() === this.node.peerId.toString()) {
-        console.log("Ignoring self connection attempt.");
-        return;
-      }
+
     const ma = multiaddr(peerMultiaddr);
     await this.node.dial(ma);
     console.log("Connected to peer:", peerMultiaddr);
