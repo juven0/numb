@@ -41,11 +41,11 @@ class FilecoinNode {
       addresses: {
         listen: [
           `/ip4/0.0.0.0/tcp/${this.listenPort}`,
-          `/ip6/::/tcp/${this.listenPort}`,
+
         ],
         announce: [
-          `/ip4/0.0.0.0/tcp/${this.listenPort}`,
-          `/ip6/::/tcp/${this.listenPort}`,
+          `/ip4/192.168.1.121/tcp/${this.listenPort}`,
+
         ],
       },
       transports: [tcp()],
@@ -104,7 +104,7 @@ class FilecoinNode {
 
     this.node.addEventListener("peer:discovery", async (evt) => {
         const peerId = evt.detail.id;
-
+        console.log(evt.detail)
   if (peerId.toString() === this.node.peerId.toString()) {
     console.log("Ignoring self connection via mdns discovery.");
     return;
@@ -180,6 +180,10 @@ class FilecoinNode {
   }
 
   async connectToPeer(peerMultiaddr) {
+    if (ma.getPeerId() === this.node.peerId.toString()) {
+        console.log("Ignoring self connection attempt.");
+        return;
+      }
     const ma = multiaddr(peerMultiaddr);
     await this.node.dial(ma);
     console.log("Connected to peer:", peerMultiaddr);
