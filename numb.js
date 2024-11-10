@@ -473,9 +473,14 @@ class FilecoinNode {
   }
 
   async getPeerStoreage(){
-    // const localSpace = await this.DHT.getLocalDiskSpace();
+    const localSpace = await this.DHT.getLocalDiskSpace();
     const remoteSpace  = await this.DHT.getAllPeersDiskSpace()
-    return remoteSpace
+    if (remoteSpace.successful.length!== 0){
+        return ((remoteSpace.successful[0].freeSpace+localSpace)/ (1024 * 1024 * 1024)).toFixed(2)
+    }else{
+        return (localSpace/ (1024 * 1024 * 1024)).toFixed(2)
+    }
+
   }
 }
 
