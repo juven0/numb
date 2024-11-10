@@ -64,7 +64,7 @@ class FilecoinNode {
       })],
       nat: true,
       connectionManager: {
-        minConnections: 0, // Réduire le minimum pour les tests
+        minConnections: 5, // Réduire le minimum pour les tests
         maxConnections: 50,
         pollInterval: 2000,
         autoDialInterval: 2000,
@@ -209,6 +209,11 @@ class FilecoinNode {
       return Buffer.from(bufferJson.data);
     }
     return bufferJson;
+  }
+  async getConnectedPeersCount() {
+    console.log(this.node.getPeers())
+
+    return this.node.getPeers().length +1
   }
   async splitAndStoreFile(filePath, name, userId, privateKey, pubkey) {
     const fileContent = await fs.readFile(filePath);
@@ -465,6 +470,12 @@ class FilecoinNode {
 
   async canAccessFile(fileHash, userId) {
     return this.shareSystem.canAccessFile(fileHash, userId);
+  }
+
+  async getPeerStoreage(){
+    // const localSpace = await this.DHT.getLocalDiskSpace();
+    const remoteSpace  = await this.DHT.getAllPeersDiskSpace()
+    return remoteSpace
   }
 }
 

@@ -1,6 +1,12 @@
 import { concat as uint8ArrayConcat } from "uint8arrays/concat";
 import { toString as uint8ArrayToString } from "uint8arrays/to-string";
 import { fromString as uint8ArrayFromString } from "uint8arrays/from-string";
+import { promises as fsPromises } from 'fs';
+import * as os from 'os';
+import path from 'path';
+import { promisify } from 'util';
+import { exec as execCallback } from 'child_process';
+const exec = promisify(execCallback);
 
 class DHT {
   constructor(node, BlockStorage) {
@@ -16,6 +22,7 @@ class DHT {
       await this.storage.init();
       await this.node.handle("/simpledht/store", this._handleStore.bind(this));
       await this.node.handle("/simpledht/get", this._handleGet.bind(this));
+      await this.node.handle("/simpledht/disk-space", this._handleDiskSpace.bind(this));
       console.log("SimpleDHT started with persistent storage");
     } catch (error) {
       console.error("Error starting DHT:", error);
@@ -44,10 +51,10 @@ class DHT {
       const tracker = this.chunkTracker.get(keyString);
       tracker.received.set(parseInt(chunkIndex), value);
 
-      console.log(`Stored chunk ${chunkIndex + 1}/${totalChunks}`);
-      console.log(
-        `Current chunks: ${tracker.received.size}/${tracker.totalExpected}`
-      );
+    //   console.log(`Stored chunk ${chunkIndex + 1}/${totalChunks}`);
+    //   console.log(
+    //     `Current chunks: ${tracker.received.size}/${tracker.totalExpected}`
+    //   );
 
       // Vérifier si tous les chunks sont reçus
       if (tracker.received.size === tracker.totalExpected) {
@@ -65,7 +72,7 @@ class DHT {
         }
 
         const completeData = orderedData.join("");
-        console.log(`Assembled data length: ${completeData.length}`);
+        // console.log(`Assembled data length: ${completeData.length}`);
 
         // Stocker les données complètes
         await this.storage.storeBlock(keyString, completeData);
@@ -587,6 +594,160 @@ class DHT {
       return JSON.stringify(data);
     }
     return String(data);
+  }
+
+  // Gestionnaire pour l'espace disque
+  async _handleDiskSpace({ stream }) {
+    try {
+      const freeSpace = await this.getLocalDiskSpace();
+
+      await stream.sink([
+        uint8ArrayFromString(JSON.stringify({
+          freeSpace: freeSpace,
+          freeSpaceGB: (freeSpace / (1024 * 1024 * 1024)).toFixed(2),
+          timestamp: Date.now()
+        }))
+      ]);
+
+    } catch (error) {
+      console.error("Erreur lors de la récupération de l'espace disque:", error);
+      await stream.sink([
+        uint8ArrayFromString(JSON.stringify({
+          error: "Erreur lors de la récupération de l'espace disque",
+          message: error.message
+        }))
+      ]);
+    } finally {
+      await stream.close();
+    }
+  }
+
+  // Obtenir l'espace disque local
+  async getLocalDiskSpace() {
+    try {
+      if (process.platform === 'win32') {
+        // Pour Windows
+        const drive = process.cwd().split(path.sep)[0];
+
+        const { stdout } = await exec(`wmic logicaldisk where "DeviceID='${drive}'" get freespace`);
+        const freeSpace = parseInt(stdout.split('\n')[1]);
+        return freeSpace;
+      } else {
+        // Pour Linux/Unix
+        const stats = await fsPromises.statfs(process.cwd());
+        return stats.bsize * stats.bfree;
+      }
+    } catch (error) {
+      console.error("Erreur lors du calcul de l'espace disque:", error);
+      throw error;
+    }
+  }
+
+  // Obtenir l'espace disque d'un nœud distant
+  async getRemoteDiskSpace(peerId) {
+    try {
+      console.log(`Demande d'espace disque au pair: ${peerId.toString()}`);
+
+      const connection = await this.node.dial(peerId);
+      const stream = await connection.newStream("/simpledht/disk-space");
+
+      const response = await this._readStreamResponse(stream);
+      await stream.close();
+
+      if (response && !response.error) {
+        return {
+          peerId: peerId.toString(),
+          freeSpace: response.freeSpace,
+          freeSpaceGB: response.freeSpaceGB,
+          timestamp: response.timestamp
+        };
+      } else {
+        throw new Error(response?.error || 'Échec de la récupération de l\'espace disque');
+      }
+
+    } catch (error) {
+      console.error(`Erreur avec le pair ${peerId.toString()}:`, error);
+      throw error;
+    }
+  }
+
+  // Obtenir l'espace disque de tous les pairs
+  async getAllPeersDiskSpace() {
+    try {
+      const peers = await this.node.peerStore.all();
+      console.log(`Vérification de ${peers.length} pairs`);
+
+      const diskSpacePromises = peers.map(peer =>
+        this.getRemoteDiskSpace(peer.id)
+          .catch(error => ({
+            peerId: peer.id.toString(),
+            error: error.message,
+            status: 'failed',
+            timestamp: Date.now()
+          }))
+      );
+
+      const results = await Promise.all(diskSpacePromises);
+
+      return {
+        successful: results.filter(result => !result.error),
+        failed: results.filter(result => result.error),
+        timestamp: Date.now()
+      };
+
+    } catch (error) {
+      console.error("Erreur lors de la récupération des espaces disques:", error);
+      throw error;
+    }
+  }
+
+  // Utilitaire pour lire la réponse du stream
+  async _readStreamResponse(stream) {
+    try {
+      const message = await stream.source.next();
+      if (!message || !message.value || message.done) return null;
+
+      const value = message.value;
+      const decodedData = uint8ArrayToString(
+        value instanceof Uint8Array ? value : uint8ArrayConcat(value.bufs)
+      );
+
+      return JSON.parse(decodedData);
+    } catch (error) {
+      console.error("Erreur de lecture du stream:", error);
+      return null;
+    }
+  }
+
+  // Analyser l'espace disque de tous les pairs
+  async analyzePeersDiskSpace() {
+    try {
+      const result = await this.getAllPeersDiskSpace();
+
+      // Trier les pairs par espace disponible
+      const sortedPeers = result.successful.sort((a, b) => b.freeSpace - a.freeSpace);
+
+      // Calculer les statistiques
+      const totalPeers = result.successful.length + result.failed.length;
+      const averageSpace = result.successful.reduce((acc, peer) =>
+        acc + parseFloat(peer.freeSpaceGB), 0) / result.successful.length;
+
+      return {
+        summary: {
+          totalPeers,
+          successfulPeers: result.successful.length,
+          failedPeers: result.failed.length,
+          averageSpaceGB: averageSpace.toFixed(2),
+          timestamp: result.timestamp
+        },
+        topPeers: sortedPeers.slice(0, 5),
+        failedPeers: result.failed
+      };
+
+    } catch (error) {
+      console.error("Erreur lors de l'analyse:", error);
+      throw error;
+    }
   }
 }
 

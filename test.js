@@ -58,6 +58,13 @@ app.post("/upload", upload.single("file"), async (req, res) => {
   }
 });
 
+app.get("/nebula/", async (req, res)=>{
+    const nodes = await filecoinNode.getConnectedPeersCount()
+    res.status(200).send({
+        blocks:nodes,
+      });
+})
+
 app.post("/get/:hash", async (req, res) => {
   try {
     const result = await filecoinNode.retrieveAndSaveFile(
@@ -132,6 +139,17 @@ app.post("/user/login", async (req, res) => {
     res.status(500).send(`login faild `);
   }
 });
+
+app.get("/peer/staorage", async (req, res) => {
+    try {
+        const storage = await filecoinNode.getPeerStoreage()
+        res.status(200).send({
+            storage: storage
+        })
+    } catch (error) {
+
+    }
+})
 
 app.listen(port, () => {
   console.log(`Serveur web démarré sur http://localhost:${port}`);
