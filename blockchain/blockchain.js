@@ -163,6 +163,7 @@ class BlockChain {
       return userBlocks.map((block) => ({
         fileName: block.fileMetadata.name,
         fileHash: block.fileMetadata.hash,
+        size: block.fileMetadata.size,
         uploadTimestamp: block.timestamp,
         blockHash: block.hash,
         share: block.sharing,

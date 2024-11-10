@@ -107,6 +107,7 @@ class FilecoinNode {
         console.log(evt.detail)
   if (peerId.toString() === this.node.peerId.toString()) {
     console.log("Ignoring self connection via mdns discovery.");
+
     return;
   }
 

@@ -7,6 +7,7 @@ import { error } from "console";
 import bodyParser from "body-parser";
 import cors from "cors";
 import { hash } from "crypto";
+import fs from "fs"
 
 const app = express();
 const port = 3000;
@@ -83,9 +84,11 @@ app.post("/get/:hash", async (req, res) => {
     res.setHeader("Content-Type", "application/octet-stream");
 
     // Envoyer le fichier
-    const fileStream = fs.createReadStream(filePath);
+    const fileStream = fs.createReadStream(result);
     fileStream.pipe(res);
-  } catch {}
+  } catch (err){
+    console.log(err)
+  }
 });
 
 app.post("/user/create", async (req, res) => {
