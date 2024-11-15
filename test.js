@@ -145,9 +145,13 @@ app.post("/user/login", async (req, res) => {
 
 app.get("/peer/staorage", async (req, res) => {
     try {
-        const storage = await filecoinNode.getPeerStoreage()
+        const storage= await filecoinNode.getPeerStoreage()
+        const peer= await filecoinNode.getPeers()
+        console.log(storage)
+        // const peer = (await filecoinNode.node.peerStore.all()).length+1
         res.status(200).send({
-            storage: storage
+            storage: storage,
+            peers:peer+1
         })
     } catch (error) {
 

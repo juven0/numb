@@ -483,6 +483,16 @@ class FilecoinNode {
     }
 
   }
+  async getPeers(){
+    const localSpace = await this.DHT.getLocalDiskSpace();
+    const remoteSpace  = await this.DHT.getAllPeersDiskSpace()
+    if (remoteSpace.successful.length!== 0){
+        return remoteSpace.successful.length
+    }else{
+        return 0
+    }
+
+  }
 }
 
 export { FilecoinNode };
