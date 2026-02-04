@@ -32,7 +32,6 @@ class DistributedUserIdentity {
       await this.init();
     }
 
-    // Enregistrer les gestionnaires de protocole
     await this.node.handle(
       "/users/sync-summary",
       this._handleSyncSummary.bind(this)
@@ -44,7 +43,6 @@ class DistributedUserIdentity {
       this._handleUserValidation.bind(this)
     );
 
-    // Démarrer la synchronisation périodique
     setInterval(() => this._syncWithNetwork(), 30000);
     console.log("DistributedUserIdentity started");
   }
@@ -405,8 +403,6 @@ class DistributedUserIdentity {
     return data;
   }
 
-  // Ajoutez ces méthodes dans votre classe DistributedUserIdentity
-
   async _fetchMissingUsers(peer, userIds) {
     try {
       console.log(
@@ -417,16 +413,13 @@ class DistributedUserIdentity {
       const connection = await this.node.dial(peer.id);
       const stream = await connection.newStream("/users/fetch");
 
-      // Demander les utilisateurs
       await stream.sink([uint8ArrayFromString(JSON.stringify({ userIds }))]);
 
-      // Recevoir les utilisateurs
       const userData = await this._readStream(stream);
       const users = JSON.parse(userData);
 
       console.log(`Received ${users.length} users from peer`);
 
-      // Stocker les utilisateurs reçus
       for (const user of users) {
         if (await this._verifyUserData(user)) {
           await this._storeUserData(user);
@@ -450,12 +443,10 @@ class DistributedUserIdentity {
       const connection = await this.node.dial(peer.id);
       const stream = await connection.newStream("/users/send");
 
-      // Obtenir les données des utilisateurs
       const users = await Promise.all(
         userIds.map(async (userId) => {
           const user = await this.getUser(userId);
           if (user) {
-            // S'assurer que la clé privée n'est pas envoyée
             const { privateKey, ...publicUserData } = user;
             return publicUserData;
           }
@@ -463,7 +454,6 @@ class DistributedUserIdentity {
         })
       );
 
-      // Filtrer les utilisateurs null
       const validUsers = users.filter((user) => user !== null);
       console.log(`Sending ${validUsers.length} valid users to peer`);
 
@@ -477,7 +467,6 @@ class DistributedUserIdentity {
     }
   }
 
-  // Vous pouvez aussi ajouter cette méthode utilitaire pour la journalisation
   _logPeerOperation(operation, peerId, message) {
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] ${operation} with peer ${peerId}: ${message}`);
