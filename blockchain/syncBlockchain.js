@@ -27,24 +27,20 @@ class BlockchainSynchronizer {
         const connection = await this.node.dial(peer.id);
         const stream = await connection.newStream("/blockchain/sync");
 
-        // Obtenir le dernier bloc
         const latestBlock = await this.blockchain.getLasteBlock();
         console.log(
           "Latest block:",
           latestBlock ? `Hash: ${latestBlock.hash}` : "No blocks yet"
         );
 
-        // Préparer les données de synchronisation
         const syncData = {
           latestHash: latestBlock ? latestBlock.hash : null,
           height: latestBlock ? latestBlock.index : -1,
         };
 
-        // Envoyer notre état actuel
         await stream.sink([uint8ArrayFromString(JSON.stringify(syncData))]);
         console.log("Sent sync data:", syncData);
 
-        // Recevoir la réponse du pair
         const response = await this._readStreamData(stream);
         if (!response) {
           console.log("No response from peer");
@@ -56,14 +52,12 @@ class BlockchainSynchronizer {
         console.log("Received peer data:", peerData);
 
         if (!latestBlock && peerData.height >= 0) {
-          // Nous n'avons pas de blocs, mais le pair en a
           console.log("Requesting initial chain from peer");
           await this._requestFullChain(stream);
         } else if (peerData.height > latestBlock.index) {
           console.log("Requesting missing blocks from peer");
           await this._requestMissingBlocks(stream, latestBlock.hash);
         } else if (peerData.height < latestBlock.index) {
-          // Nous avons plus de blocs que le pair
           console.log("Sending missing blocks to peer");
           await this._sendMissingBlocks(stream, peerData.latestHash);
         } else {
